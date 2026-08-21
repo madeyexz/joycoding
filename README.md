@@ -97,21 +97,26 @@ normalized input → semantic action traces.
 
 ### Xbox layout in this fork
 
-The default Xbox profile keeps the original tap actions and adds direct access
-to the apps that dominate the tested workflow:
+The default Xbox profile keeps the core editing taps and replays the exact
+global shortcuts already assigned in Raycast. JoyCoding reads Raycast's newest
+local cloud-sync snapshot at launch and never writes Raycast settings:
 
 | Control | Tap | Hold / app-specific |
 |---|---|---|
-| LT | Raycast Dictation PTT | Hold sends Right Shift + Return; release stops |
+| LT | Raycast Dictation PTT | Follows Raycast's current Dictation shortcut |
 | RT | Previous app | — |
-| LB | Confirm / send | Slack |
-| RB | Arc | Ghostty |
-| L3 | Cancel | Codex |
-| Share / Elite Profile | WeChat | Heptabase |
+| LB | Confirm / send | Raycast → Slack |
+| RB | Raycast → Arc | Raycast → Warp |
+| L3 | Cancel | Raycast → Codex |
+| R3 | Side chat | Raycast → Amp |
+| View | Focus input | Raycast Clipboard History |
+| Menu | Open Raycast | Raycast AI Chat |
+| Share / Elite Profile | Raycast → WeChat | Raycast → Heptabase |
 | D-pad left / right | Previous / next session or tab | — |
-| X / Y / View in Arc | Reload / Back / Close tab | — |
+| X | Clear input (Reload in Arc) | Raycast Emoji Picker |
+| Y | Backspace (Back in Arc) | — |
 
-The Raycast screenshots and exact event sequence are included in the
+The local-settings assertions, Raycast screenshots, and exact event sequence are included in the
 [Xbox proof](docs/xbox-proof.md#raycast-dictation-hold-lt-to-speak).
 
 ## Install

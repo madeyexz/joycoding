@@ -126,15 +126,18 @@ centred. JoyCoding now normalizes it to its existing zero-based clockwise form.
 
 ## Raycast Dictation: hold LT to speak
 
-This fork defaults the voice shortcut to the exact binding configured in
-Raycast Beta on the test Mac:
+This fork follows the exact Dictation binding stored by Raycast on the test Mac:
 
-```json
-{"pttStyle":"hold","pttKey":"return","pttMods":["rightshift"]}
+```text
+Raycast command: c:r:dictation::-::dictateText
+Raycast shortcut: Right Shift + Return (virtual key code 36)
+JoyCoding mode: hold
 ```
 
-Raycast's Dictation settings displayed **Right Shift + Return** for the Dictate
-command. JoyCoding therefore emits the sided modifier as a real key-code 60
+This was read without opening or editing Raycast from its local snapshot at
+`~/Library/Application Support/com.raycast.macos/cloud-sync/settings-snapshots/`.
+The encrypted/custom `.db` files were not modified. JoyCoding therefore emits
+the sided modifier as a real key-code 60
 `flagsChanged` event, followed by Return key-code 36. The right-side flag is
 preserved in addition to the ordinary Shift flag; emitting only generic Shift
 does not match this Raycast shortcut.
@@ -152,6 +155,53 @@ same two `Actions` entry points through JoyCoding's authenticated localhost
 remote. Splitting the proof this way makes the Raycast boundary repeatable
 without claiming that the screenshot itself was triggered by a controller
 press.
+
+## Raycast shortcut layer
+
+The same read-only snapshot contained the global hotkeys used by the Xbox
+profile. An opt-in integration test loaded the actual file on this Mac—not a
+fixture—and asserted all nine bindings:
+
+```text
+Open Raycast       ⌘ Space       Arc        ⌥ A
+Raycast AI Chat    ⌥ Space       Slack      ⌥ S
+Dictation          Right⇧ Return Codex      ⌥ C
+Heptabase          ⌥ E           Amp        ⌥ X
+Warp               ⌥ W
+```
+
+The production action path retains Raycast's macOS virtual key code and emits a
+complete physical modifier-down, key-down, key-up, modifier-up chord. Therefore
+the controller invokes the same global shortcut Raycast already owns; it does
+not launch apps through a separate implementation or rewrite Raycast's
+preferences.
+
+Run the machine-specific assertion with:
+
+```bash
+JOYCODING_VERIFY_LOCAL_RAYCAST=1 swift test \
+  --filter HIDNormalizationTests/testCurrentMacRaycastBindingsWhenExplicitlyRequested
+```
+
+On the test Mac this executed 1 test with 0 failures. The ordinary portable
+suite separately checks the JSON parser and exact synthesized chord plan using
+a fixture.
+
+The installed signed app was also exercised through its authenticated local
+action endpoint. The front app started as Slack. JoyCoding ran
+`raycastAmp`, Raycast handled its existing `⌥X` global hotkey, and macOS then
+reported Amp as frontmost. The same path ran `raycastSlack` (`⌥S`) to restore
+the original app:
+
+```text
+JoyCoding: ok: raycastAmp
+macOS front app: com.hamishbultitude.ampcode (Amp)
+JoyCoding: ok: raycastSlack
+macOS front app: com.tinyspeck.slackmacgap (Slack)
+```
+
+This canary proves the emitted shortcuts were accepted by Raycast and resolved
+to their assigned applications. It did not edit Raycast settings.
 
 ### While PTT is held
 
@@ -217,6 +267,8 @@ macOS receiver key-down (`keyCode 36`).
 
 ```bash
 swift test
+JOYCODING_VERIFY_LOCAL_RAYCAST=1 swift test \
+  --filter HIDNormalizationTests/testCurrentMacRaycastBindingsWhenExplicitlyRequested
 ./build.sh --no-notarize
 
 swiftc -O tools/hidprobe/main.swift -framework IOKit -o .build/hidprobe
