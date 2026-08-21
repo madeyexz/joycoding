@@ -1,56 +1,23 @@
 import SwiftUI
 import AppKit
 
+/// JoyCoding owns its AppKit lifecycle directly. The previous SwiftUI
+/// `MenuBarExtra` scene could leave the process alive without registering a
+/// status item, which made an LSUIElement app impossible to reopen.
 @main
-struct JoyCodingApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @ObservedObject private var hid = HIDInput.shared
-    @ObservedObject private var http = HTTPServer.shared
-    @ObservedObject private var batt = JoyConBattery.shared
+enum JoyCodingApp {
+    @MainActor private static let delegate = AppDelegate()
 
-    var body: some Scene {
-        MenuBarExtra {
-            if hid.devices.isEmpty {
-                Button(L("没有手柄 — 按一下手柄任意键唤醒")) {
-                    SettingsWindow.shared.show(tab: .mapping)
-                }
-            } else {
-                ForEach(hid.devices) { d in
-                    Button(batt.levels[d.id].map {
-                        "🎮 \(d.name)   \($0)%" + (batt.charging[d.id] == true ? " ⚡" : "")
-                    } ?? "🎮 \(d.name)") {
-                        SettingsWindow.shared.show(tab: .mapping)
-                    }
-                }
-            }
-            Divider()
-            if KeySynth.hasAccessibility {
-                Button(L("辅助功能 ✓")) { SettingsWindow.shared.show(tab: .general) }
-            } else {
-                // 直接开系统设置那一页 —— 用户要的是去授权, 不是看我们的界面
-                Button(L("⚠️ 辅助功能未授权 — 去授权")) {
-                    NSWorkspace.shared.open(URL(string:
-                      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                }
-            }
-            if ConfigStore.shared.config.httpEnabled {
-                Button(http.running ? L("遥控端口 %@ ✓", String(ConfigStore.shared.config.httpPort))
-                                    : L("⚠️ 遥控端口未监听")) {
-                    SettingsWindow.shared.show(tab: .remote)
-                }
-            }
-            Divider()
-            Button(L("设置…")) { SettingsWindow.shared.show() }.keyboardShortcut(",")
-            Button(L("退出 JoyCoding")) { NSApp.terminate(nil) }.keyboardShortcut("q")
-        } label: {
-            MenuBarLabel()
-        }
+    @MainActor
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.regular)
+        app.run()
     }
 }
 
-/// 自己管设置窗口。SwiftUI 的 Settings scene 要靠 showSettingsWindow: 这个
-/// 私有 selector 打开, 在 .accessory 策略的菜单栏 app 里经常发不出去,
-/// 或者窗口开在别的 app 后面。直接持有 NSWindow 最稳。
+/// 自己管设置窗口。菜单栏和 Dock 都走同一个窗口实例，避免重复窗口。
 final class SettingsWindow: NSObject, NSWindowDelegate {
     static let shared = SettingsWindow()
     private var window: NSWindow?
@@ -84,45 +51,131 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ])
     }
 
+    func close() {
+        window?.performClose(nil)
+    }
+
     func windowWillClose(_ notification: Notification) {
         HIDInput.shared.setTestMode(false)
     }
 }
 
-// 菜单栏图标统一用 SF Symbols 的 gamecontroller。
-// 试过按左右 Joy-Con 手绘区分, 但 16pt 下画不像, 反而不如一个标准图标清楚。
-// (另: MenuBarExtra 的 label 只可靠支持 Text / Image, SwiftUI 形状画不出来,
-//  真要手绘得先落到 template NSImage 上。)
+/// Native AppKit status item. Keeping the NSStatusItem strongly referenced is
+/// the deterministic contract: if this object is alive, WindowServer owns a
+/// concrete JoyCoding menu-bar window.
+@MainActor
+final class StatusBarController: NSObject, NSMenuDelegate {
+    private let statusItem: NSStatusItem
+    private let menu = NSMenu()
+    private var refreshTimer: Timer?
 
-/// 菜单栏上的图标 + 电量。图标右边直接显示百分比, 不用点开菜单。
-struct MenuBarLabel: View {
-    @ObservedObject private var hid = HIDInput.shared
-    @ObservedObject private var batt = JoyConBattery.shared
-    @ObservedObject private var store = ConfigStore.shared
+    override init() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
 
-    private var pct: Int? {
-        guard let d = hid.devices.first else { return nil }
-        return batt.levels[d.id]
+        menu.delegate = self
+        statusItem.menu = menu
+        statusItem.button?.toolTip = "JoyCoding"
+        refreshStatusItem()
+        rebuildMenu()
+
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshStatusItem() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        refreshTimer = timer
     }
-    private var isCharging: Bool {
-        guard let d = hid.devices.first else { return false }
-        return batt.charging[d.id] == true
+
+    deinit {
+        refreshTimer?.invalidate()
+        NSStatusBar.system.removeStatusItem(statusItem)
     }
 
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: hid.devices.isEmpty
-                  ? "gamecontroller" : "gamecontroller.fill")
-            if store.config.showBatteryInMenuBar, let pct {
-                if isCharging { Image(systemName: "bolt.fill") }
-                Text("\(pct)%").monospacedDigit()
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        rebuildMenu()
+        refreshStatusItem()
+    }
+
+    private func refreshStatusItem() {
+        guard let button = statusItem.button else { return }
+        let devices = HIDInput.shared.devices
+        let symbolName = devices.isEmpty ? "gamecontroller" : "gamecontroller.fill"
+        let image = NSImage(systemSymbolName: symbolName,
+                            accessibilityDescription: "JoyCoding")
+        image?.isTemplate = true
+        button.image = image
+        button.imagePosition = .imageLeading
+
+        if ConfigStore.shared.config.showBatteryInMenuBar,
+           let device = devices.first,
+           let level = JoyConBattery.shared.levels[device.id] {
+            let charging = JoyConBattery.shared.charging[device.id] == true ? " ⚡" : ""
+            button.title = " \(level)%\(charging)"
+        } else {
+            button.title = ""
+        }
+    }
+
+    private func rebuildMenu() {
+        menu.removeAllItems()
+
+        let devices = HIDInput.shared.devices
+        if devices.isEmpty {
+            addItem(L("没有手柄 — 按一下手柄任意键唤醒"), action: #selector(openMapping))
+        } else {
+            for device in devices {
+                var title = "🎮 \(device.name)"
+                if let level = JoyConBattery.shared.levels[device.id] {
+                    title += "   \(level)%"
+                    if JoyConBattery.shared.charging[device.id] == true { title += " ⚡" }
+                }
+                addItem(title, action: #selector(openMapping))
             }
         }
+
+        menu.addItem(.separator())
+        if KeySynth.hasAccessibility {
+            addItem(L("辅助功能 ✓"), action: #selector(openGeneral))
+        } else {
+            addItem(L("⚠️ 辅助功能未授权 — 去授权"),
+                    action: #selector(openAccessibilitySettings))
+        }
+
+        if ConfigStore.shared.config.httpEnabled {
+            let title = HTTPServer.shared.running
+                ? L("遥控端口 %@ ✓", String(ConfigStore.shared.config.httpPort))
+                : L("⚠️ 遥控端口未监听")
+            addItem(title, action: #selector(openRemote))
+        }
+
+        menu.addItem(.separator())
+        addItem(L("设置…"), action: #selector(openSettings), keyEquivalent: ",")
+        addItem(L("退出 JoyCoding"), action: #selector(quit), keyEquivalent: "q")
+    }
+
+    private func addItem(_ title: String, action: Selector,
+                         keyEquivalent: String = "") {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        if !keyEquivalent.isEmpty { item.keyEquivalentModifierMask = [.command] }
+        menu.addItem(item)
+    }
+
+    @objc private func openMapping() { SettingsWindow.shared.show(tab: .mapping) }
+    @objc private func openGeneral() { SettingsWindow.shared.show(tab: .general) }
+    @objc private func openRemote() { SettingsWindow.shared.show(tab: .remote) }
+    @objc private func openSettings() { SettingsWindow.shared.show() }
+    @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func openAccessibilitySettings() {
+        guard let url = URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
-/// 外观。默认跟随系统 —— NSApp.appearance = nil 就是"不覆盖"。
-/// 设成具体值会同时影响设置窗和菜单栏下拉菜单。
+/// 外观。默认跟随系统 —— NSApp.appearance = nil 就是“不覆盖”。
 enum Appearance {
     static func apply(_ mode: String) {
         switch mode {
@@ -133,10 +186,15 @@ enum Appearance {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ n: Notification) {
-        // 菜单栏 app, 不要 Dock 图标
-        NSApp.setActivationPolicy(.accessory)
+    private var statusBarController: StatusBarController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Keep a normal Dock presence as a permanent recovery path.
+        NSApp.setActivationPolicy(.regular)
+        installMainMenu()
+        statusBarController = StatusBarController()
 
         // 只触发系统授权提示, 不弹自己的模态框 —— 模态框会阻塞后面的启动流程,
         // HTTP 服务就起不来了; 而且每次启动都弹很烦。状态在菜单栏和设置里显示。
@@ -150,16 +208,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HIDInput.shared.start()
         HTTPServer.shared.restart()
 
-        // 一条映射都没有 = 还没配过, 直接把设置摆出来, 省得对方找不到入口。
-        // 也支持 --settings 从命令行直接开 (调试和写脚本方便)
         let configured = ConfigStore.shared.config.devices.contains { !$0.buttons.isEmpty }
         if HIDProof.shared.enabled {
-            // A visible window also keeps the opt-in physical-input proof run alive.
             SettingsWindow.shared.show(tab: .mapping)
         } else if !configured || CommandLine.arguments.contains("--settings") {
-            // Opening synchronously also keeps a fresh menu-bar launch alive on
-            // macOS versions that may otherwise exit before a delayed block runs.
             SettingsWindow.shared.show()
         }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication,
+                                       hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindow.shared.show()
+        return true
+    }
+
+    /// A pure AppKit lifecycle does not synthesize the standard SwiftUI menu
+    /// commands. Install the small native menu this utility needs so keyboard
+    /// equivalents travel through macOS's normal command routing.
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu(title: "JoyCoding")
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let aboutItem = NSMenuItem(
+            title: L("关于 JoyCoding"),
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: "")
+        aboutItem.target = NSApp
+        appMenu.addItem(aboutItem)
+        appMenu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(
+            title: L("设置…"), action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        settingsItem.keyEquivalentModifierMask = [.command]
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+
+        let quitItem = NSMenuItem(
+            title: L("退出 JoyCoding"),
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q")
+        quitItem.target = NSApp
+        quitItem.keyEquivalentModifierMask = [.command]
+        appMenu.addItem(quitItem)
+
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: L("文件"))
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
+        let closeItem = NSMenuItem(
+            title: L("关闭窗口"), action: #selector(closeKeyWindow), keyEquivalent: "w")
+        closeItem.target = self
+        closeItem.keyEquivalentModifierMask = [.command]
+        fileMenu.addItem(closeItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func openSettings() {
+        SettingsWindow.shared.show()
+    }
+
+    @objc private func closeKeyWindow(_ sender: Any?) {
+        SettingsWindow.shared.close()
     }
 }

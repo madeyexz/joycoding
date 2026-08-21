@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 
 APP="build/JoyCoding.app"
-VERSION="0.1.1"
+VERSION="0.1.4"
 
 # 通用二进制: Intel Mac 也能跑。两个切片都是 minos 13.0,
 # 代码里没有任何架构条件编译, 依赖的全是系统框架, 所以只是编两遍再合并。
@@ -134,8 +134,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key>           <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>    <string>13.0</string>
-    <!-- 菜单栏 app, 不占 Dock -->
-    <key>LSUIElement</key>               <true/>
+    <!-- Normal foreground app: the Dock icon is the recovery path if a
+         menu-bar item is ever unavailable. -->
     <key>CFBundleIconFile</key>          <string>AppIcon</string>
     <key>NSPrincipalClass</key>          <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>   <true/>
@@ -199,7 +199,7 @@ if [ -d /Applications/JoyCoding.app ]; then
   rm -rf /Applications/JoyCoding.app
   ditto "$APP" /Applications/JoyCoding.app
   echo "▸ 已同步到 /Applications"
-  [ -n "$RUNNING" ] && open /Applications/JoyCoding.app
+  [ -n "$RUNNING" ] && open /Applications/JoyCoding.app --args --settings
 fi
 
 echo "✅ $APP"

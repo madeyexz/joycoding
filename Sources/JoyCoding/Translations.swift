@@ -143,6 +143,7 @@ enum Translations {
         "辅助功能 ✓": "Accessibility ✓",
         "没有手柄 — 按一下手柄任意键唤醒": "No controller — press any button to wake it",
         "设置…": "Settings…", "退出 JoyCoding": "Quit JoyCoding",
+        "关于 JoyCoding": "About JoyCoding", "文件": "File", "关闭窗口": "Close Window",
         "复制为表格": "Copy as table",
         "添加": "Add", "选 app…": "Choose app…",
         "bundle ID，例如 md.obsidian": "Bundle ID, e.g. md.obsidian",
