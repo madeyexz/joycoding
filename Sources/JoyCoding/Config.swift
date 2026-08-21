@@ -240,21 +240,22 @@ struct Config: Codable {
     var appProfiles: [String: AppKeyMap] = [:]
 
     var devices: [DeviceProfile] = []
-    /// Versioned so an existing Elite profile gets the Raycast layer once without
-    /// repeatedly overwriting later user customization.
-    var xboxRaycastPresetVersion = 2
+    /// Versioned so an existing Elite profile gets each shipped Base-layer update
+    /// once without repeatedly overwriting later user customization.
+    var xboxRaycastPresetVersion = 6
 
     mutating func migrateXboxRaycastPresetIfNeeded() {
-        guard xboxRaycastPresetVersion < 2 else { return }
+        guard xboxRaycastPresetVersion < 6 else { return }
         let oldVersion = xboxRaycastPresetVersion
-        defer { xboxRaycastPresetVersion = 2 }
+        defer { xboxRaycastPresetVersion = 6 }
         for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
+            func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
+                         from old: String?, to new: String) {
+                guard devices[index].buttons[button]?[keyPath: path] == old else { return }
+                devices[index].buttons[button, default: ButtonBinding()][keyPath: path] = new
+            }
+
             if oldVersion < 1 {
-                func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
-                             from old: String?, to new: String) {
-                    guard devices[index].buttons[button]?[keyPath: path] == old else { return }
-                    devices[index].buttons[button, default: ButtonBinding()][keyPath: path] = new
-                }
                 replace("3", \.long, from: nil, to: "raycastEmojiPicker")
                 replace("5", \.long, from: "focusSlack", to: "raycastSlack")
                 replace("6", \.tap, from: "focusArc", to: "raycastArc")
@@ -301,6 +302,56 @@ struct Config: Codable {
                     devices[index].buttons.removeValue(forKey: "12")
                 }
             }
+
+            if oldVersion < 3 {
+                // Replace only the shipped tap defaults. Long/double gestures and
+                // genuinely custom LB/RB taps remain untouched.
+                replace("5", \.tap, from: "confirm", to: "appCyclePrevious")
+                replace("6", \.tap, from: "raycastArc", to: "appCycleNext")
+            }
+
+            if oldVersion < 4 {
+                // Replace only the shipped L3/left-stick defaults. A custom tap or
+                // custom direction map remains untouched.
+                replace("9", \.tap, from: "cancel", to: "selectFocused")
+                if devices[index].sticks[StickChannel.left.rawValue] == DefaultProfiles.dpad {
+                    devices[index].sticks[StickChannel.left.rawValue] =
+                        DefaultProfiles.leftStickSelection
+                }
+            }
+
+            if oldVersion < 5 {
+                // Amp's app layer gets Cmd+N on Menu without replacing a custom
+                // Menu override. Keep the Base hold gesture available in the layer.
+                var override = devices[index].overrides[BundleID.amp] ?? AppOverride()
+                if override.buttons["8"] == nil {
+                    override.buttons["8"] = ButtonBinding(
+                        tap: "ampNewSession", long: "raycastAIChat")
+                }
+                devices[index].overrides[BundleID.amp] = override
+
+            }
+
+            if oldVersion < 6 {
+                // Version 5 accidentally put Amp's thread shortcuts in Base.
+                // Restore Base only when it still exactly matches that shipped
+                // preset, then add the intended app-specific directions without
+                // replacing a user's Amp overrides.
+                if devices[index].sticks[StickChannel.hat.rawValue] == DefaultProfiles.xboxDpad {
+                    devices[index].sticks[StickChannel.hat.rawValue] = DefaultProfiles.dpad
+                }
+
+                var override = devices[index].overrides[BundleID.amp] ?? AppOverride()
+                var hat = override.sticks[StickChannel.hat.rawValue] ?? [:]
+                if hat["up"] == nil {
+                    hat["up"] = "ampPreviousThread"
+                }
+                if hat["down"] == nil {
+                    hat["down"] = "ampNextThread"
+                }
+                override.sticks[StickChannel.hat.rawValue] = hat
+                devices[index].overrides[BundleID.amp] = override
+            }
         }
     }
 
@@ -330,6 +381,7 @@ enum AppName {
         case BundleID.slack:   return "Slack"
         case BundleID.heptabase: return "Heptabase"
         case BundleID.codex:   return "Codex"
+        case BundleID.amp:     return "ampcode"
         default: return bid.split(separator: ".").last.map(String.init) ?? bid
         }
     }
@@ -344,6 +396,7 @@ enum BundleID {
     static let slack   = "com.tinyspeck.slackmacgap"
     static let heptabase = "app.projectmeta.projectmeta"
     static let codex   = "com.openai.codex"
+    static let amp     = "com.hamishbultitude.ampcode"
 }
 
 // MARK: - 存取

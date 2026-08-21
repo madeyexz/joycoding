@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AnchorShape { case circle, capsuleH, capsuleV }
-enum AnchorKind { case auto, button, stick, home, share, profile, touchpad }
+enum AnchorKind { case auto, button, stick, home, share, profile, touchpad, system }
 
 /// 摇杆四向的虚拟锚点 id。用负数, 和真实按键编号错开。
 enum StickAnchor {
@@ -67,7 +67,8 @@ struct DeviceArt {
                   size: .init(width: 0.72, height: 0.028), shape: .capsuleH, side: .right),
             // 加号在左上 (实机确认, 2026-08)
             .init(id: 10, label: "+",  pos: .init(x: 0.30, y: 0.115),
-                  size: .init(width: 0.13, height: 0.038), shape: .circle, side: .left),
+                  size: .init(width: 0.13, height: 0.038), shape: .circle, side: .left,
+                  kind: .system),
             // ABXY 菱形: X 上 / Y 左 / A 右 / B 下
             .init(id: 2,  label: "X",  pos: .init(x: 0.50, y: 0.235),
                   size: .init(width: 0.21, height: 0.062), shape: .circle, side: .right),
@@ -100,7 +101,8 @@ struct DeviceArt {
             .init(id: 15, label: "L",  pos: .init(x: 0.50, y: 0.045),
                   size: .init(width: 0.72, height: 0.028), shape: .capsuleH, side: .left),
             .init(id: 9,  label: "−",  pos: .init(x: 0.70, y: 0.115),
-                  size: .init(width: 0.13, height: 0.038), shape: .circle, side: .right),
+                  size: .init(width: 0.13, height: 0.038), shape: .circle, side: .right,
+                  kind: .system),
             .init(id: 11, label: L("摇杆按下"), pos: .init(x: 0.50, y: 0.235),
                   size: .init(width: 0.48, height: 0.140), shape: .circle, side: .right),
             .init(id: StickAnchor.id, label: L("摇杆方向"), pos: .init(x: 0.50, y: 0.235),
@@ -157,9 +159,11 @@ struct DeviceArt {
                   size: .init(width: 0.155, height: 0.225), shape: .circle, side: .right),
 
             .init(id: 9,  label: "−", pos: .init(x: 0.398, y: 0.250),
-                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .left),
+                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .left,
+                  kind: .system),
             .init(id: 10, label: "+", pos: .init(x: 0.602, y: 0.250),
-                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .right),
+                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .right,
+                  kind: .system),
             .init(id: 14, label: "◉", pos: .init(x: 0.418, y: 0.420),
                   size: .init(width: 0.048, height: 0.070), shape: .circle, side: .left),
             .init(id: 13, label: "⌂", pos: .init(x: 0.582, y: 0.420),
@@ -207,9 +211,11 @@ struct DeviceArt {
                   size: .init(width: 0.140, height: 0.212), shape: .circle, side: .right),
 
             .init(id: 7, label: "View", pos: .init(x: 0.425, y: 0.436),
-                  size: .init(width: 0.044, height: 0.067), shape: .circle, side: .left),
+                  size: .init(width: 0.044, height: 0.067), shape: .circle, side: .left,
+                  kind: .system),
             .init(id: 8, label: "Menu", pos: .init(x: 0.574, y: 0.436),
-                  size: .init(width: 0.044, height: 0.067), shape: .circle, side: .right),
+                  size: .init(width: 0.044, height: 0.067), shape: .circle, side: .right,
+                  kind: .system),
             .init(id: 11, label: "Xbox", pos: .init(x: 0.500, y: 0.285),
                   size: .init(width: 0.074, height: 0.112), shape: .circle, side: .right,
                   kind: .home),
@@ -303,28 +309,62 @@ struct DeviceBody: View {
     let highlighted: Int?
     let liveDir: (StickChannel, String)?
 
+    @Environment(\.colorScheme) private var scheme
+
     private let bodyColor = Color(red: 0.16, green: 0.17, blue: 0.19)
 
     /// Xelu's CC0 Xbox Series diagram is close enough to the Elite Series 2
     /// front shell that it makes a much better geometric base than a hand-
     /// approximated silhouette. JoyCoding still owns every live overlay, so
     /// the imported artwork never dictates input behavior.
-    private static let xboxVectorImage: NSImage? = {
+    ///
+    /// The source art is white line work. Recoloring it once per appearance
+    /// keeps the line weight readable on both hero surfaces: dark ink on the
+    /// light tile, near-white ink on the dark one.
+    private static func xboxVector(ink: String) -> NSImage? {
         let bundle = Bundle.main
         let urls = [
             bundle.url(forResource: "XboxSeriesController", withExtension: "svg",
                        subdirectory: "ControllerArt"),
             bundle.url(forResource: "XboxSeriesController", withExtension: "svg"),
         ]
-        return urls.compactMap { $0 }.compactMap(NSImage.init(contentsOf:)).first
-    }()
+        guard let url = urls.compactMap({ $0 }).first,
+              var svg = try? String(contentsOf: url, encoding: .utf8)
+        else { return nil }
+        svg = svg.replacingOccurrences(of: "#ffffff", with: ink,
+                                       options: .caseInsensitive)
+        return NSImage(data: Data(svg.utf8))
+    }
+
+    private static let xboxVectorLight: NSImage? = xboxVector(ink: "#3c3c40")
+    private static let xboxVectorDark: NSImage? = xboxVector(ink: "#e3e4e9")
 
     private var isXbox: Bool {
         art.style == .xbox || art.style == .xboxElite2
     }
 
+    private var dark: Bool { scheme == .dark }
+
+    private var xboxVectorImage: NSImage? {
+        dark ? Self.xboxVectorDark : Self.xboxVectorLight
+    }
+
     private var usesXboxVector: Bool {
-        isXbox && Self.xboxVectorImage != nil
+        isXbox && xboxVectorImage != nil
+    }
+
+    /// 叠加控件的表面色。线稿是空心的, 所以这些键帽要自己带底色才盖得住
+    /// 下面的线; 底色必须跟随明暗, 否则深色模式下会出现一排白斑。
+    private var controlSurface: Color {
+        dark ? Color(white: 0.20) : .white
+    }
+
+    private var controlEdge: Color {
+        dark ? Color.white.opacity(0.32) : Color.black.opacity(0.30)
+    }
+
+    private var controlGlyph: Color {
+        dark ? Color.white.opacity(0.62) : Color.black.opacity(0.45)
     }
 
     var body: some View {
@@ -332,7 +372,6 @@ struct DeviceBody: View {
             let w = geo.size.width, h = geo.size.height
             ZStack(alignment: .topLeading) {
                 if usesXboxVector {
-                    xboxBackdrop(w: w, h: h)
                     xboxArtwork(w: w, h: h)
                     if let dpad = art.anchors.first(where: {
                         StickChannel.from(anchorID: $0.id) == .hat
@@ -374,70 +413,45 @@ struct DeviceBody: View {
 
     @ViewBuilder
     private func xboxArtwork(w: CGFloat, h: CGFloat) -> some View {
-        if let image = Self.xboxVectorImage {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .frame(width: w, height: h)
-                .opacity(0.74)
+        if let image = xboxVectorImage {
+            ZStack {
+                // 线稿本身是空心的。在轮廓里垫一层很浅的机身色, 手柄才有"面";
+                // 这条路径是照着同一张 CC0 线稿标定的, 所以能对上边界。
+                xboxPath(w, h)
+                    .fill(LinearGradient(
+                        colors: dark ? [Color(white: 0.255), Color(white: 0.165)]
+                                     : [Color(white: 0.995), Color(white: 0.945)],
+                        startPoint: .top, endPoint: .bottom))
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .frame(width: w, height: h)
+            }
+            .frame(width: w, height: h)
         }
-    }
-
-    private func xboxBackdrop(w: CGFloat, h: CGFloat) -> some View {
-        ZStack {
-            xboxTriggerPath(w, h, side: .left)
-                .fill(LinearGradient(colors: [Color(red: 0.30, green: 0.31, blue: 0.33),
-                                               Color(red: 0.11, green: 0.12, blue: 0.13)],
-                                     startPoint: .top, endPoint: .bottom))
-            xboxTriggerPath(w, h, side: .right)
-                .fill(LinearGradient(colors: [Color(red: 0.30, green: 0.31, blue: 0.33),
-                                               Color(red: 0.11, green: 0.12, blue: 0.13)],
-                                     startPoint: .top, endPoint: .bottom))
-            shell(w: w, h: h)
-        }
-        .frame(width: w, height: h)
-    }
-
-    private func xboxTriggerPath(_ w: CGFloat, _ h: CGFloat, side: Side) -> Path {
-        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            .init(x: (side == .left ? x : 1 - x) * w, y: y * h)
-        }
-        var path = Path()
-        path.move(to: pt(0.165, 0.165))
-        path.addLine(to: pt(0.205, 0.030))
-        path.addCurve(to: pt(0.252, 0.018),
-                      control1: pt(0.218, 0.003), control2: pt(0.242, 0.005))
-        path.addCurve(to: pt(0.280, 0.128),
-                      control1: pt(0.266, 0.032), control2: pt(0.270, 0.090))
-        path.addLine(to: pt(0.310, 0.158))
-        path.closeSubpath()
-        return path
     }
 
     /// The source diagram depicts a Series controller's cross D-pad. The
     /// connected Elite Series 2 has the circular faceted metal dish, so this
     /// opaque live overlay both corrects the hardware model and covers the
-    /// source D-pad without changing the source asset.
+    /// source D-pad without changing the source asset. The machined dish is
+    /// brushed metal, so it darkens with the surrounding surface.
     private func xboxDpadOverlay(_ a: ButtonAnchor, w: CGFloat, h: CGFloat) -> some View {
-        let side = max(28, a.size.width * w * 1.18)
+        let side = max(28, a.size.width * w * 1.10)
         let active = liveDir?.0 == .hat ? liveDir?.1 : nil
+        let metal: [Color] = dark
+            ? [0.50, 0.33, 0.44, 0.31, 0.50].map { Color(white: $0) }
+            : [0.93, 0.80, 0.90, 0.78, 0.93].map { Color(white: $0) }
         return ZStack {
             Circle()
-                .fill(AngularGradient(
-                    colors: [
-                        Color(red: 0.36, green: 0.37, blue: 0.39),
-                        Color(red: 0.12, green: 0.13, blue: 0.14),
-                        Color(red: 0.31, green: 0.32, blue: 0.34),
-                        Color(red: 0.10, green: 0.11, blue: 0.12),
-                        Color(red: 0.36, green: 0.37, blue: 0.39),
-                    ], center: .center))
+                .fill(AngularGradient(colors: metal, center: .center))
             EliteDPadFacetLines()
-                .stroke(Color.white.opacity(0.13), lineWidth: 1)
+                .stroke(Color.black.opacity(dark ? 0.24 : 0.10), lineWidth: 1)
             Circle()
-                .stroke(Color.white.opacity(0.34), lineWidth: 1.2)
+                .stroke(Color.black.opacity(dark ? 0.50 : 0.30), lineWidth: 1.2)
             Circle()
-                .fill(Color.black.opacity(0.24))
+                .fill(Color.black.opacity(dark ? 0.26 : 0.10))
                 .frame(width: side * 0.29, height: side * 0.29)
             ForEach([
                 ("up", "chevron.up", CGPoint(x: 0.50, y: 0.17)),
@@ -447,14 +461,15 @@ struct DeviceBody: View {
             ], id: \.0) { key, icon, pos in
                 Image(systemName: icon)
                     .font(.system(size: side * 0.085, weight: .bold))
-                    .foregroundStyle(active == key ? Color.accentColor : Color.white.opacity(0.42))
+                    .foregroundStyle(active == key ? Color.accentColor
+                                                   : Color.black.opacity(dark ? 0.62 : 0.45))
                     .shadow(color: active == key ? Color.accentColor.opacity(0.65) : .clear,
                             radius: 3)
                     .position(x: pos.x * side, y: pos.y * side)
             }
         }
         .frame(width: side, height: side)
-        .shadow(color: .black.opacity(0.42), radius: 2, y: 1.5)
+        .shadow(color: .black.opacity(0.18), radius: 2, y: 1.5)
         .position(x: a.pos.x * w, y: a.pos.y * h)
         .frame(width: w, height: h)
     }
@@ -474,24 +489,24 @@ struct DeviceBody: View {
         ZStack {
             if isFace {
                 Circle()
-                    .fill(hot ? Color.accentColor.opacity(0.78)
-                          : Color(red: 0.105, green: 0.11, blue: 0.12))
-                    .overlay(Circle().stroke(Color.white.opacity(hot ? 0.85 : 0.40),
+                    .fill(hot ? Color.accentColor.opacity(0.85) : controlSurface)
+                    .overlay(Circle().stroke(hot ? Color.accentColor : controlEdge,
                                              lineWidth: 1.1))
                     .frame(width: bw, height: bw)
+                    .shadow(color: .black.opacity(dark ? 0.30 : 0.10), radius: 1, y: 1)
                 Text(a.label)
                     .font(.system(size: max(8, bw * 0.52), weight: .bold, design: .rounded))
                     .foregroundStyle(hot ? Color.white : faceLegend(a.label))
             } else if a.kind == .profile {
                 Capsule()
-                    .fill(hot ? Color.accentColor.opacity(0.80)
-                          : Color(red: 0.105, green: 0.11, blue: 0.12))
-                    .overlay(Capsule().stroke(Color.white.opacity(hot ? 0.85 : 0.34),
+                    .fill(hot ? Color.accentColor.opacity(0.85) : controlSurface)
+                    .overlay(Capsule().stroke(hot ? Color.accentColor : controlEdge,
                                               lineWidth: 1))
                     .frame(width: bw * 1.42, height: bw * 0.68)
+                    .shadow(color: .black.opacity(dark ? 0.30 : 0.10), radius: 1, y: 1)
                 HStack(spacing: max(1.5, bw * 0.10)) {
                     ForEach(0..<3, id: \.self) { _ in
-                        Circle().fill(Color.white.opacity(hot ? 0.95 : 0.62))
+                        Circle().fill(hot ? Color.white : controlGlyph)
                             .frame(width: max(2, bw * 0.10), height: max(2, bw * 0.10))
                     }
                 }
@@ -870,7 +885,7 @@ struct DeviceBody: View {
                         .foregroundStyle(Color.black.opacity(0.5))
                 }
 
-            case .button:    // 面键 + 加减号
+            case .button, .system:    // 面键 + 加减号 / 系统键
                 Circle().fill(fillColor(a.id)).frame(width: bw, height: bw)
                 if a.label == "View" {
                     Image(systemName: "rectangle.on.rectangle")

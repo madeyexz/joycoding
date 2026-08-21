@@ -15,6 +15,77 @@ enum RawInput: Equatable {
     case hat(Int?, StickChannel)
 }
 
+/// Xbox A acts as a momentary Command modifier for the shoulder buttons while
+/// remaining an ordinary Confirm tap when released without using the chord.
+struct CommandAppSwitcherChord {
+    enum Effect: Equatable {
+        case none
+        case begin
+        case next
+        case previous
+        case finish(tapA: Bool)
+        case consume
+    }
+
+    private(set) var deviceID: String?
+    private var used = false
+    private var consumedShoulders: Set<String> = []
+    private var suppressedA: Set<String> = []
+
+    mutating func handle(button: Int, down: Bool, device: String,
+                         isXbox: Bool) -> Effect {
+        let key = "\(device)/\(button)"
+        if consumedShoulders.contains(key) {
+            if !down { consumedShoulders.remove(key) }
+            return .consume
+        }
+        if button == 1, suppressedA.contains(key) {
+            if !down { suppressedA.remove(key) }
+            return .consume
+        }
+        guard isXbox else { return .none }
+
+        if button == 1 {
+            if down {
+                deviceID = device
+                used = false
+                return .begin
+            }
+            guard deviceID == device else { return .none }
+            let tapA = !used
+            deviceID = nil
+            used = false
+            return .finish(tapA: tapA)
+        }
+
+        guard down, deviceID == device, button == 5 || button == 6 else {
+            return .none
+        }
+        used = true
+        consumedShoulders.insert(key)
+        return button == 6 ? .next : .previous
+    }
+
+    /// Returns true when the caller must synthesize Command-up.
+    mutating func cancel(suppressAUntilRelease: Bool) -> Bool {
+        guard let deviceID else { return false }
+        if suppressAUntilRelease { suppressedA.insert("\(deviceID)/1") }
+        self.deviceID = nil
+        used = false
+        return true
+    }
+
+    /// Device removal has no matching button-up event, so discard its swallowed
+    /// releases as well as releasing Command.
+    mutating func removeDevice(_ device: String) -> Bool {
+        let wasActive = deviceID == device
+        if wasActive { deviceID = nil; used = false }
+        consumedShoulders = consumedShoulders.filter { !$0.hasPrefix("\(device)/") }
+        suppressedA = suppressedA.filter { !$0.hasPrefix("\(device)/") }
+        return wasActive
+    }
+}
+
 /// 手柄输入层。按 HID 用途匹配而不是写死厂商 —— Joy-Con / PS / Xbox / 8BitDo
 /// 上报的都是 usagePage=1(GenericDesktop) + usage=5(GamePad) 或 4(Joystick)。
 final class HIDInput: ObservableObject {
@@ -57,6 +128,8 @@ final class HIDInput: ObservableObject {
     private var repeatTimer: Timer?
     private var repeatButton: Int?
     private var pttActive = false
+    private var commandChord = CommandAppSwitcherChord()
+    private var commandChordFuse: Timer?
     private var activeButtons: Set<String> = []
     /// A press that began while Test Mode was on stays suppressed through release,
     /// even if the toggle is turned off while the physical button is still held.
@@ -70,6 +143,7 @@ final class HIDInput: ObservableObject {
     func setTestMode(_ enabled: Bool) {
         guard testMode != enabled else { return }
         cancelPendingGestures()
+        cancelCommandChord(suppressAUntilRelease: false)
         if enabled { testSuppressedButtons.formUnion(activeButtons) }
         // 如果是在按住 PTT 时打开测试模式，先补发松开，不能留下卡住的修饰键。
         if enabled, pttActive {
@@ -94,6 +168,16 @@ final class HIDInput: ObservableObject {
         pressTime.removeAll()
         longFired.removeAll()
         repeatTimer?.invalidate(); repeatTimer = nil; repeatButton = nil
+    }
+
+    /// Release every synthetic modifier owned by the HID layer. Called on app
+    /// termination as a final backstop in addition to disconnect and timeout paths.
+    func releaseHeldModifiers() {
+        cancelCommandChord(suppressAUntilRelease: false)
+        if pttActive {
+            Actions.pttStop()
+            pttActive = false
+        }
     }
 
     // MARK: - 启动
@@ -168,7 +252,13 @@ final class HIDInput: ObservableObject {
             return dev
         }.sorted { $0.name < $1.name }
 
-        for gone in devices where !found.contains(gone) { JoyConBattery.shared.detach(id: gone.id) }
+        for gone in devices where !found.contains(gone) {
+            if commandChord.removeDevice(gone.id) {
+                commandChordFuse?.invalidate(); commandChordFuse = nil
+                if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: false) }
+            }
+            JoyConBattery.shared.detach(id: gone.id)
+        }
         devices = found
     }
 
@@ -360,6 +450,11 @@ final class HIDInput: ObservableObject {
             return
         }
 
+        if handleCommandChord(button: n, down: down, device: device,
+                              profile: prof, binding: b) {
+            return
+        }
+
         if down {
             pressTime[n] = Date()
             longFired.remove(n)
@@ -392,6 +487,68 @@ final class HIDInput: ObservableObject {
                     self.runAction(tap)
                 }
             }
+        }
+    }
+
+    private func handleCommandChord(button: Int, down: Bool, device: String,
+                                    profile: DeviceProfile,
+                                    binding: ButtonBinding) -> Bool {
+        let effect = commandChord.handle(
+            button: button, down: down, device: device,
+            isXbox: profile.vendorID == XboxHID.vendorID)
+        switch effect {
+        case .none:
+            return false
+        case .consume:
+            return true
+        case .begin:
+            if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: true) }
+            armCommandChordFuse(device: device)
+            lastDispatch = L("按住 A：app 切换器")
+            HIDProof.shared.record("commandChord", ["phase": "begin", "deviceID": device])
+            return true
+        case .next, .previous:
+            armCommandChordFuse(device: device)
+            let previous = effect == .previous
+            let action = previous ? "commandShiftTab" : "commandTab"
+            lastDispatch = previous ? L("A + LB：上一个 app") : L("A + RB：下一个 app")
+            HIDProof.shared.record("action", ["action": action, "deviceID": device])
+            if !HIDProof.shared.dryRun {
+                KeySynth.keyStroke(previous ? ["cmd", "shift"] : ["cmd"], "tab")
+            }
+            return true
+        case .finish(let tapA):
+            commandChordFuse?.invalidate(); commandChordFuse = nil
+            if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: false) }
+            HIDProof.shared.record("commandChord", [
+                "phase": "finish", "deviceID": device, "tapA": tapA,
+            ])
+            if tapA, let tap = binding.tap { runAction(tap) }
+            return true
+        }
+    }
+
+    private func armCommandChordFuse(device: String) {
+        commandChordFuse?.invalidate()
+        commandChordFuse = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { _ in
+            guard self.commandChord.deviceID == device else { return }
+            if self.commandChord.cancel(suppressAUntilRelease: true),
+               !HIDProof.shared.dryRun {
+                KeySynth.modifierHold("cmd", down: false)
+            }
+            self.commandChordFuse = nil
+            self.lastDispatch = L("A 长按超时：已释放 Command")
+            HIDProof.shared.record("commandChord", [
+                "phase": "fuse", "deviceID": device,
+            ])
+        }
+    }
+
+    private func cancelCommandChord(suppressAUntilRelease: Bool) {
+        commandChordFuse?.invalidate(); commandChordFuse = nil
+        if commandChord.cancel(suppressAUntilRelease: suppressAUntilRelease),
+           !HIDProof.shared.dryRun {
+            KeySynth.modifierHold("cmd", down: false)
         }
     }
 

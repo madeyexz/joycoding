@@ -35,12 +35,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
 
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
+            contentRect: NSRect(x: 0, y: 0, width: 1320, height: 880),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
         w.title = L("JoyCoding 设置")
         w.contentView = NSHostingView(rootView: SettingsView())
-        w.contentMinSize = NSSize(width: 1060, height: 700)
+        w.contentMinSize = NSSize(width: 1120, height: 720)
         w.center()
         w.isReleasedWhenClosed = false
         w.delegate = self
@@ -220,6 +220,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                        hasVisibleWindows flag: Bool) -> Bool {
         SettingsWindow.shared.show()
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        HIDInput.shared.releaseHeldModifiers()
     }
 
     /// A pure AppKit lifecycle does not synthesize the standard SwiftUI menu

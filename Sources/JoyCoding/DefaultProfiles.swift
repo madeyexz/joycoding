@@ -29,12 +29,26 @@ enum DefaultProfiles {
         "down":  .init(hat: 4, action: "scrollDown"),
         "left":  .init(hat: 6, action: "sessionPrev"),
     ]
+    /// Version-5 preset retained so migration can recognize and repair it.
+    static let xboxDpad: [String: StickDir] = [
+        "up":    .init(hat: 0, action: "commandRightBracket"),
+        "right": .init(hat: 2, action: "sessionNext"),
+        "down":  .init(hat: 4, action: "commandLeftBracket"),
+        "left":  .init(hat: 6, action: "sessionPrev"),
+    ]
     /// 右摇杆默认当方向键用: 选菜单、挪光标
     static let rightStick: [String: StickDir] = [
         "up":    .init(hat: 0, action: "up"),
         "right": .init(hat: 2, action: "right"),
         "down":  .init(hat: 4, action: "down"),
         "left":  .init(hat: 6, action: "left"),
+    ]
+    /// 左摇杆在 UI 中移动键盘焦点；按下 L3 激活当前焦点。
+    static let leftStickSelection: [String: StickDir] = [
+        "up":    .init(hat: 0, action: "focusPrevious"),
+        "right": .init(hat: 2, action: "focusNext"),
+        "down":  .init(hat: 4, action: "focusNext"),
+        "left":  .init(hat: 6, action: "focusPrevious"),
     ]
 
     // MARK: - Xbox
@@ -46,11 +60,11 @@ enum DefaultProfiles {
             2: "cancel",        // B
             3: "clearLine",     // X
             4: "delete",        // Y
-            5: "confirm",       // LB — left-hand send
-            6: "raycastArc",    // RB
+            5: "appCyclePrevious", // LB — Cmd+Shift+Tab direction
+            6: "appCycleNext",     // RB — Cmd+Tab direction
             7: "focusInput",    // View
             8: "raycastLauncher", // Menu
-            9: "cancel",        // left stick click
+            9: "selectFocused", // left stick click — activate keyboard focus
             10: "sideChat",     // right stick click
             XboxHID.leftTriggerButton: "ptt",
             XboxHID.rightTriggerButton: "switchApp",
@@ -59,15 +73,15 @@ enum DefaultProfiles {
         ])
         // Long presses preserve every existing tap while exposing common work apps directly.
         p.buttons["3"]?.long = "raycastEmojiPicker" // X tap still clears input
-        p.buttons["5"]?.long = "raycastSlack"       // LB tap still confirms
-        p.buttons["6"] = ButtonBinding(tap: "raycastArc", long: "raycastWarp")
+        p.buttons["5"]?.long = "raycastSlack"
+        p.buttons["6"] = ButtonBinding(tap: "appCycleNext", long: "raycastWarp")
         p.buttons["7"]?.long = "raycastClipboardHistory"
         p.buttons["8"]?.long = "raycastAIChat"
-        p.buttons["9"]?.long = "raycastCodex"       // L3 tap still cancels
+        p.buttons["9"]?.long = "raycastCodex"
         p.buttons["10"]?.long = "raycastAmp"        // R3 tap still opens side chat
         p.sticks = [
             StickChannel.hat.rawValue: dpad,
-            StickChannel.left.rawValue: dpad,
+            StickChannel.left.rawValue: leftStickSelection,
             StickChannel.right.rawValue: rightStick,
         ]
         p.overrides = [
@@ -81,6 +95,16 @@ enum DefaultProfiles {
                 "4": ButtonBinding(tap: "arcNavBack"),
                 "7": ButtonBinding(tap: "arcCloseTab", long: "raycastClipboardHistory"),
             ]),
+            BundleID.amp: AppOverride(
+                buttons: [
+                    "8": ButtonBinding(tap: "ampNewSession", long: "raycastAIChat"),
+                ],
+                sticks: [
+                    StickChannel.hat.rawValue: [
+                        "up": "ampPreviousThread",
+                        "down": "ampNextThread",
+                    ],
+                ]),
         ]
         return p
     }

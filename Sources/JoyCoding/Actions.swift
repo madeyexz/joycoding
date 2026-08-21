@@ -102,6 +102,24 @@ enum Actions {
         ActionDef("down", L("下"), repeatable: true) { if ctx.inTarget() { key([], "down") } },
         ActionDef("left", L("左"), repeatable: true) { if ctx.inTarget() { key([], "left") } },
         ActionDef("right", L("右"), repeatable: true) { if ctx.inTarget() { key([], "right") } },
+        ActionDef("commandRightBracket", L("Command + ]"), repeatable: true) {
+            key(["cmd"], "]")
+        },
+        ActionDef("commandLeftBracket", L("Command + ["), repeatable: true) {
+            key(["cmd"], "[")
+        },
+        ActionDef("focusPrevious", L("上一个可选项"), L("Shift+Tab 移动焦点"),
+                  repeatable: true) {
+            key(["shift"], "tab")
+        },
+        ActionDef("focusNext", L("下一个可选项"), L("Tab 移动焦点"),
+                  repeatable: true) {
+            key([], "tab")
+        },
+        ActionDef("selectFocused", L("选择当前项"), L("Return 激活焦点")) {
+            key([], "return")
+            MenuMode.exit()
+        },
         ActionDef("ptt", L("语音输入"), L("按住录, 松开出字")) { /* 按下/松开另行处理 */ },
         ActionDef("focusInput", L("聚焦输入框"), L("点一下底部输入区")) {
             // Claude Code / 微信都没有聚焦输入框的快捷键(文档和菜单都查过),
@@ -134,6 +152,18 @@ enum Actions {
         // ── Claude Code ───────────────────────────────────────
         ActionDef("newSession", L("新建 Session"), "Cmd+N", group: "Claude Code", onlyIn: BundleID.claude) {
             send("newSession")
+        },
+        ActionDef("ampNewSession", L("Amp 新建会话"), "Cmd+N", group: "ampcode",
+                  onlyIn: BundleID.amp) {
+            send("newSession")
+        },
+        ActionDef("ampPreviousThread", L("Amp 上一个侧边栏线程"), "Ctrl+Option+↑",
+                  group: "ampcode", repeatable: true, onlyIn: BundleID.amp) {
+            key(["ctrl", "alt"], "up")
+        },
+        ActionDef("ampNextThread", L("Amp 下一个侧边栏线程"), "Ctrl+Option+↓",
+                  group: "ampcode", repeatable: true, onlyIn: BundleID.amp) {
+            key(["ctrl", "alt"], "down")
         },
         ActionDef("modelMenu", L("切换模型"), L("Claude 开菜单 / Codex 打 /model"), group: "Claude Code") {
             send("modelMenu")
@@ -201,6 +231,14 @@ enum Actions {
                   group: "Arc", onlyIn: BundleID.arc) { send("closeTab") },
 
         // ── 切换 app (不受白名单限制, 任何地方都能用) ──────────
+        ActionDef("appCycleNext", L("下一个 app"), L("像 ⌘Tab，一按就切换"),
+                  group: L("切换 app")) {
+            ctx.switchToPrevious()
+        },
+        ActionDef("appCyclePrevious", L("上一个 app"), L("像 ⌘⇧Tab，一按就切换"),
+                  group: L("切换 app")) {
+            ctx.switchToNext()
+        },
         ActionDef("switchApp", L("切换到上一个 app"), L("连按继续往前翻"), group: L("切换 app")) {
             ctx.switchToPrevious()
         },
