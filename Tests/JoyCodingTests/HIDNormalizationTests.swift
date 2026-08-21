@@ -39,6 +39,49 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertNil(XboxHID.virtualButton(vendor: 0x045E, usagePage: 0x09, usage: 0xC5))
     }
 
+    func testElite2BLEButtonsUseCanonicalXboxNames() {
+        let pairs = [1: 1, 2: 2, 4: 3, 5: 4, 7: 5, 8: 6,
+                     11: 8, 12: 12, 13: 11, 14: 9, 15: 10]
+        for (raw, canonical) in pairs {
+            XCTAssertEqual(XboxHID.canonicalButton(
+                vendor: 0x045E, product: 0x0B22,
+                usagePage: XboxHID.buttonPage, usage: raw), canonical)
+        }
+        XCTAssertNil(XboxHID.canonicalButton(
+            vendor: 0x045E, product: 0x0B22,
+            usagePage: XboxHID.buttonPage, usage: 3))
+        XCTAssertNil(XboxHID.canonicalButton(
+            vendor: 0x045E, product: 0x0B22,
+            usagePage: XboxHID.buttonPage, usage: 6))
+        XCTAssertEqual(XboxHID.canonicalButton(
+            vendor: 0x045E, product: 0x0B22,
+            usagePage: XboxHID.consumerPage, usage: XboxHID.elite2ViewUsage), 7)
+    }
+
+    func testOtherControllersKeepTheirButtonUsages() {
+        XCTAssertEqual(XboxHID.canonicalButton(
+            vendor: 0x045E, product: 0x0B13,
+            usagePage: XboxHID.buttonPage, usage: 3), 3)
+        XCTAssertEqual(XboxHID.canonicalButton(
+            vendor: 0x057E, product: 0x2009,
+            usagePage: XboxHID.buttonPage, usage: 4), 4)
+    }
+
+    func testElite2UsesItsPhysicalArtworkAndName() throws {
+        XCTAssertEqual(XboxHID.displayName(
+            vendor: 0x045E, product: 0x0B22,
+            reported: "Xbox Wireless Controller"), "Xbox Elite Series 2")
+
+        let anchors = DeviceArt.art(vendor: 0x045E, product: 0x0B22).anchors
+        XCTAssertEqual(anchors.first { $0.id == 3 }?.label, "X")
+        XCTAssertEqual(anchors.first { $0.id == 4 }?.label, "Y")
+        XCTAssertEqual(anchors.first { $0.id == 5 }?.label, "LB")
+        XCTAssertEqual(anchors.first { $0.id == 7 }?.label, "View")
+        XCTAssertEqual(anchors.first { $0.id == 8 }?.label, "Menu")
+        XCTAssertEqual(anchors.first { $0.id == 11 }?.label, "Xbox")
+        XCTAssertEqual(anchors.first { $0.id == 12 }?.label, "Profile")
+    }
+
     func testXboxShipsWithUsableDefaults() throws {
         let profile = try XCTUnwrap(DefaultProfiles.make(
             vendor: 0x045E, product: 0x0B22, name: "Xbox Wireless Controller"))

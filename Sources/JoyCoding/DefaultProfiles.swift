@@ -52,7 +52,7 @@ enum DefaultProfiles {
             8: "modelMenu",     // Menu
             9: "cancel",        // left stick click
             10: "sideChat",     // right stick click
-            12: "focusWeChat",  // Share
+            12: "focusWeChat",  // Share; Profile on Elite Series 2
             XboxHID.leftTriggerButton: "ptt",
             XboxHID.rightTriggerButton: "switchApp",
             // 11 = Xbox button: macOS reserves the guide/menu behaviour.
@@ -61,7 +61,7 @@ enum DefaultProfiles {
         p.buttons["5"]?.long = "focusSlack"       // LB tap still confirms
         p.buttons["6"] = ButtonBinding(tap: "focusArc", long: "focusGhostty")
         p.buttons["9"]?.long = "focusCodex"       // L3 tap still cancels
-        p.buttons["12"]?.long = "focusHeptabase"   // Share tap still opens WeChat
+        p.buttons["12"]?.long = "focusHeptabase"   // Share/Profile tap still opens WeChat
         p.sticks = ["hat": dpad]
         p.overrides = [
             BundleID.chrome: AppOverride(

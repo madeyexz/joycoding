@@ -376,7 +376,17 @@ struct MappingView: View {
         }
     }
 
+    @ViewBuilder
     private func buttonCard(_ d: ConnectedDevice, _ a: ButtonAnchor, width: CGFloat) -> some View {
+        if d.vendorID == XboxHID.vendorID && d.productID == XboxHID.elite2ProductID && a.id == 11 {
+            reservedXboxCard(a, width: width)
+        } else {
+            editableButtonCard(d, a, width: width)
+        }
+    }
+
+    private func editableButtonCard(_ d: ConnectedDevice, _ a: ButtonAnchor,
+                                    width: CGFloat) -> some View {
         let overridden = !layer.isEmpty && (profile?.isOverridden(button: a.id, app: layer) ?? false)
         let b = profile?.binding(button: a.id, app: layer) ?? ButtonBinding()
         let live = pressed == a.id
@@ -430,6 +440,25 @@ struct MappingView: View {
                                           : Color.primary.opacity(0.16)),
                         lineWidth: live ? 2 : 1))
         .onHover { hot = $0 ? a.id : (hot == a.id ? nil : hot) }
+    }
+
+    private func reservedXboxCard(_ a: ButtonAnchor, width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(a.label)
+                .font(.system(.title3, design: .rounded).weight(.bold))
+            Text(L("macOS 系统保留（打开游戏控制器）"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .frame(width: width, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.10), radius: 2, y: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1))
     }
 
     private func gestureRow(_ d: ConnectedDevice, _ n: Int, _ title: String?,

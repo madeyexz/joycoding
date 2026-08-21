@@ -5,6 +5,11 @@ import Foundation
 /// ordinary button numbers and zero-based, clockwise hat directions.
 enum XboxHID {
     static let vendorID = 0x045E
+    static let elite2ProductID = 0x0B22
+
+    static let buttonPage = 0x09
+    static let consumerPage = 0x0C
+    static let elite2ViewUsage = 0xB2
 
     // Xbox Bluetooth reports its analog triggers on the Simulation Controls page.
     static let simulationPage = 0x02
@@ -14,6 +19,43 @@ enum XboxHID {
     // Virtual button IDs live outside the controller's physical Button-page range.
     static let leftTriggerButton = 20
     static let rightTriggerButton = 21
+
+    /// JoyCoding stores the conventional Xbox numbering (1=A, 2=B, 3=X, ...),
+    /// but the Elite Series 2 BLE descriptor deliberately leaves holes for the
+    /// legacy C/Z and digital-trigger fields. Its View button is also exposed as
+    /// Consumer/Record rather than on the Button page. Normalize at the HID
+    /// boundary so profiles and the mapping UI remain conventional.
+    static func canonicalButton(vendor: Int, product: Int, usagePage: Int,
+                                usage: Int) -> Int? {
+        guard usagePage == buttonPage ||
+                (vendor == vendorID && product == elite2ProductID &&
+                 usagePage == consumerPage && usage == elite2ViewUsage)
+        else { return nil }
+
+        guard vendor == vendorID && product == elite2ProductID else {
+            return usagePage == buttonPage ? usage : nil
+        }
+
+        if usagePage == consumerPage { return 7 } // View
+        return [
+            1: 1,   // A
+            2: 2,   // B
+            4: 3,   // X
+            5: 4,   // Y
+            7: 5,   // LB
+            8: 6,   // RB
+            11: 8,  // Menu
+            12: 12, // Profile
+            13: 11, // Xbox / Guide (macOS may reserve it)
+            14: 9,  // L3
+            15: 10, // R3
+        ][usage]
+    }
+
+    static func displayName(vendor: Int, product: Int, reported: String) -> String {
+        vendor == vendorID && product == elite2ProductID
+            ? "Xbox Elite Series 2" : reported
+    }
 
     static func virtualButton(vendor: Int, usagePage: Int, usage: Int) -> Int? {
         guard vendor == vendorID, usagePage == simulationPage else { return nil }

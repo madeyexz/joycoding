@@ -250,6 +250,7 @@ enum Translations {
         "⚠️ 没有匹配的配置": "⚠️ no matching profile",
         "  电量 — (": "  battery — (",
         "pttStyleHint": "Choose the first for push-to-talk tools like Raycast, Typeless, or VoiceInk; macOS dictation is a toggle, so pick the second.",
+        "macOS 系统保留（打开游戏控制器）": "Reserved by macOS (opens Game Controller settings)",
         "pttKeyHint": "Shortcut chords send the complete physical key sequence and preserve left/right modifier identity — important when a dictation tool binds Right Shift specifically.",
         "pttFuseHint": "If the controller disconnects mid-hold, the release event never arrives and the modifier stays stuck, making the machine unusable. This is the backstop.",
         "remoteWarn": "⚠️ This endpoint hands keyboard access to the network. Use it on a trusted LAN or Tailscale only — never port-forward it.",

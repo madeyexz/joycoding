@@ -112,7 +112,8 @@ final class HIDInput: ObservableObject {
             guard let v = IOHIDDeviceGetProperty(d, kIOHIDVendorIDKey as CFString) as? Int,
                   let p = IOHIDDeviceGetProperty(d, kIOHIDProductIDKey as CFString) as? Int
             else { return nil }
-            let n = IOHIDDeviceGetProperty(d, kIOHIDProductKey as CFString) as? String ?? L("手柄")
+            let reported = IOHIDDeviceGetProperty(d, kIOHIDProductKey as CFString) as? String ?? L("手柄")
+            let n = XboxHID.displayName(vendor: v, product: p, reported: reported)
             let dev = ConnectedDevice(vendorID: v, productID: p, name: n)
             JoyConBattery.shared.attach(d, id: dev.id)
             HIDInput.seedDefaults(dev)
@@ -140,9 +141,18 @@ final class HIDInput: ObservableObject {
         // 来自哪只手柄。只记真实输入 —— 厂商页上那些 0x21 子命令回复是
         // 电量轮询的产物, 混在里面会盖掉真正的按键记录。
         let dev = IOHIDElementGetDevice(elem)
-        let name = IOHIDDeviceGetProperty(dev, kIOHIDProductKey as CFString) as? String ?? "?"
+        let reportedName = IOHIDDeviceGetProperty(dev, kIOHIDProductKey as CFString) as? String ?? "?"
+        let vendor = IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int
+        let product = IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int
+        let name = vendor.flatMap { v0 in product.map {
+            XboxHID.displayName(vendor: v0, product: $0, reported: reportedName)
+        }} ?? reportedName
+        let canonicalButton = vendor.flatMap { v0 in product.flatMap {
+            XboxHID.canonicalButton(vendor: v0, product: $0,
+                                    usagePage: Int(page), usage: usage)
+        }}
         if page == UInt32(kHIDPage_Button) || page == UInt32(kHIDPage_GenericDesktop)
-            || page == UInt32(XboxHID.simulationPage) {
+            || page == UInt32(XboxHID.simulationPage) || canonicalButton != nil {
             DispatchQueue.main.async {
                 self.inputCount += 1
                 self.lastInput = "#\(self.inputCount) \(name) page=0x\(String(page, radix: 16)) "
@@ -154,8 +164,6 @@ final class HIDInput: ObservableObject {
                 "logicalMax": IOHIDElementGetLogicalMax(elem),
             ])
         }
-        let vendor = IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int
-        let product = IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int
         let devID = vendor.flatMap { v0 in product.map { DeviceProfile.key(v0, $0) } } ?? ""
 
         if rawDevices.contains(devID) {
@@ -192,11 +200,11 @@ final class HIDInput: ObservableObject {
             return
         }
 
-        guard page == UInt32(kHIDPage_Button) else { return }
-        let buttonKey = "\(devID)/\(usage)"
+        guard let button = canonicalButton else { return }
+        let buttonKey = "\(devID)/\(page)/\(usage)"
         if lastButton[buttonKey] == v { return }        // 去抖
         lastButton[buttonKey] = v
-        DispatchQueue.main.async { self.onButton(usage, down: v == 1, device: devID) }
+        DispatchQueue.main.async { self.onButton(button, down: v == 1, device: devID) }
     }
 
     private var profile: DeviceProfile? {

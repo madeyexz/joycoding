@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AnchorShape { case circle, capsuleH, capsuleV }
-enum AnchorKind { case auto, button, stick, home, share, touchpad }
+enum AnchorKind { case auto, button, stick, home, share, profile, touchpad }
 
 /// 摇杆四向的虚拟锚点 id。用负数, 和真实按键编号错开。
 enum StickAnchor {
@@ -25,7 +25,7 @@ struct ButtonAnchor: Identifiable {
 }
 
 /// 手柄外观 + 按键锚点。内置 Joy-Con、Switch Pro、PlayStation 和 Xbox。
-enum BodyStyle { case joycon, proController, playstation, xbox }
+enum BodyStyle { case joycon, proController, playstation, xbox, xboxElite2 }
 
 struct DeviceArt {
     let anchors: [ButtonAnchor]
@@ -46,6 +46,7 @@ struct DeviceArt {
     /// 左右 Joy-Con 是两个不同的设备, 产品 ID 也不同, 各画各的。
     static func art(vendor: Int, product: Int) -> DeviceArt {
         switch (vendor, product) {
+        case (XboxHID.vendorID, XboxHID.elite2ProductID): return xboxElite2
         case (XboxHID.vendorID, _): return xbox
         case (0x057E, 0x2006): return joyconLeft
         case (0x057E, 0x2007): return joyconRight
@@ -167,8 +168,7 @@ struct DeviceArt {
         ],
         aspect: 1.45, railSide: nil, style: .proController, hatLabel: L("十字键"))
 
-    /// Xbox Wireless / Elite layout. The HID button IDs and trigger axes were
-    /// verified against Microsoft's Bluetooth descriptor (VID 045E, PID 0B22).
+    /// Standard Xbox Wireless layout, using JoyCoding's canonical button IDs.
     static let xbox = DeviceArt(
         anchors: [
             .init(id: XboxHID.leftTriggerButton, label: "LT", pos: .init(x: 0.180, y: 0.018),
@@ -205,14 +205,27 @@ struct DeviceArt {
                   size: .init(width: 0.050, height: 0.072), shape: .circle, side: .left),
             .init(id: 8, label: "Menu", pos: .init(x: 0.602, y: 0.250),
                   size: .init(width: 0.050, height: 0.072), shape: .circle, side: .right),
+            .init(id: 11, label: "Xbox", pos: .init(x: 0.500, y: 0.150),
+                  size: .init(width: 0.058, height: 0.084), shape: .circle, side: .right,
+                  kind: .home),
             .init(id: 12, label: "Share", pos: .init(x: 0.500, y: 0.365),
                   size: .init(width: 0.048, height: 0.070), shape: .circle, side: .left,
                   kind: .share),
-            .init(id: 11, label: "Xbox", pos: .init(x: 0.500, y: 0.485),
-                  size: .init(width: 0.058, height: 0.084), shape: .circle, side: .right,
-                  kind: .home),
         ],
         aspect: 1.45, railSide: nil, style: .xbox, hatLabel: L("十字键"))
+
+    /// Elite Series 2 BLE uses gapped raw HID usages, normalized before they
+    /// reach this canonical layout. The lower center control is Profile, not
+    /// the Share button found on the Series X|S controller.
+    static let xboxElite2: DeviceArt = {
+        var anchors = xbox.anchors.filter { $0.id != 12 }
+        anchors.append(.init(id: 12, label: "Profile",
+            pos: .init(x: 0.500, y: 0.365),
+            size: .init(width: 0.048, height: 0.070), shape: .circle,
+            side: .left, kind: .profile))
+        return DeviceArt(anchors: anchors, aspect: xbox.aspect, railSide: nil,
+                         style: .xboxElite2, hatLabel: xbox.hatLabel)
+    }()
 
     /// PlayStation 手柄 (DualShock 4 / DualSense)。
     ///
@@ -361,7 +374,9 @@ struct DeviceBody: View {
 
     private func bodyPath(_ w: CGFloat, _ h: CGFloat) -> Path {
         if art.style == .playstation { return psPath(w, h) }
-        if art.style == .proController || art.style == .xbox { return proPath(w, h) }
+        if art.style == .proController || art.style == .xbox || art.style == .xboxElite2 {
+            return proPath(w, h)
+        }
         let rS = w * 0.12, rB = w * 0.46
         var p = Path()
         // 滑轨在右边时整条机身左右翻一下 (左 Joy-Con)
@@ -497,11 +512,12 @@ struct DeviceBody: View {
                 Circle().stroke(Color.white.opacity(0.12), lineWidth: 1)
                     .frame(width: bw * 0.74, height: bw * 0.74)
 
-            case .home, .share:    // Home / Share / 截图键: 外圈 + 图标
+            case .home, .share, .profile:    // 中央系统键: 外圈 + 图标
                 Circle().stroke(Color.white.opacity(hot ? 0.9 : 0.20), lineWidth: 1.5)
                     .frame(width: bw * 1.55, height: bw * 1.55)
                 Circle().fill(fillColor(a.id)).frame(width: bw, height: bw)
-                Image(systemName: kind == .home ? "house.fill" : "square.fill")
+                Image(systemName: kind == .home ? "x.circle.fill"
+                      : (kind == .profile ? "ellipsis" : "square.fill"))
                     .font(.system(size: max(5, bw * 0.5)))
                     .foregroundStyle(Color.black.opacity(0.5))
 
