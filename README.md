@@ -39,6 +39,7 @@ None of that needs a keyboard. JoyCoding maps that loop onto a controller:
 - **Phone remote** over your LAN — pair once with a 6-digit code
 - **Battery level** for Nintendo controllers (macOS does not expose this; see [docs](docs/battery.md))
 - Live button highlighting while you map, so you never guess a button number
+- **Test Mode** highlights physical input and resolves its binding without firing any action
 - **Key profiles for 10 apps out of the box** — Claude Code, ChatGPT, Cursor,
   VS Code, Ghostty, iTerm2, Terminal, Chrome, Arc, WeChat
 - Ships with sensible defaults — plug in a controller and it just works
@@ -111,8 +112,9 @@ local cloud-sync snapshot at launch and never writes Raycast settings:
 | R3 | Side chat | Raycast → Amp |
 | View | Focus input | Raycast Clipboard History |
 | Menu | Open Raycast | Raycast AI Chat |
-| Share / Elite Profile | Raycast → WeChat | Raycast → Heptabase |
-| D-pad left / right | Previous / next session or tab | — |
+| Elite Profile | Hardware-only: cycles the controller's onboard profile | — |
+| D-pad / left stick | Scroll up/down; previous/next session | — |
+| Right stick | Arrow keys | — |
 | X | Clear input (Reload in Arc) | Raycast Emoji Picker |
 | Y | Backspace (Back in Arc) | — |
 

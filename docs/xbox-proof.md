@@ -23,7 +23,7 @@ instead of trusting the generic Bluetooth name.
 The app then reported the same device ID, with the built-in Xbox profile seeded:
 
 ```json
-{"deviceID":"045E:0B22","event":"device","mappedButtons":13,"mappedDirections":4,"name":"Xbox Elite Series 2","productID":2850,"vendorID":1118}
+{"deviceID":"045E:0B22","event":"device","mappedButtons":12,"mappedDirections":12,"name":"Xbox Elite Series 2","productID":2850,"vendorID":1118}
 ```
 
 ## Elite Series 2 Bluetooth button order
@@ -39,22 +39,23 @@ physical X       -> raw usage 4
 physical Y       -> raw usage 5
 physical LB      -> raw usage 7
 physical RB      -> raw usage 8
-physical View    -> no handled event in the original build
-physical Menu    -> raw usage 11
-physical Profile -> raw usage 12
+physical View    -> raw usage 11
+physical Menu    -> raw usage 12
+physical Profile -> no HID event (hardware profile switch)
 ```
 
-The controller's locally read report descriptor exposes View separately as
-Consumer usage `0xB2`; the original input path ignored that page. The gaps are
-real fields in the Elite BLE descriptor, not missing button presses. The fix
-normalizes those raw usages at the input boundary:
+The gaps are real fields in the Elite BLE descriptor, not missing button
+presses. The initial proof write-up incorrectly shifted the three centre
+controls one position to the right; the raw log and the physical retest show
+that View and Menu are Button-page usages 11 and 12, while Profile is handled
+entirely by the controller. The fix normalizes those raw usages at the input
+boundary:
 
 ```text
 raw 1 -> A (1)       raw 2 -> B (2)
 raw 4 -> X (3)       raw 5 -> Y (4)
 raw 7 -> LB (5)      raw 8 -> RB (6)
-0x0C:0xB2 -> View (7)
-raw 11 -> Menu (8)   raw 12 -> Profile (12)
+raw 11 -> View (7)   raw 12 -> Menu (8)
 raw 13 -> Xbox (11)  raw 14 -> L3 (9)  raw 15 -> R3 (10)
 ```
 
@@ -123,6 +124,21 @@ centred. JoyCoding now normalizes it to its existing zero-based clockwise form.
 {"direction":6,"channel":"hat","deviceID":"045E:0B22","event":"hat"}
 {"action":"sessionPrev","event":"action"}
 ```
+
+### Analog sticks
+
+The same physical trace includes four unsigned `0...65535` Generic Desktop
+axes: usages `0x30/0x31` for the left stick and `0x32/0x35` for the right stick.
+JoyCoding normalizes each axis to `-1...1`, applies separate engage/release
+thresholds, and reduces it to the same clockwise cardinal values used by the
+D-pad. The channels stay separate so Test Mode can highlight and configure
+`D-pad`, `Left stick directions`, and `Right stick directions` independently.
+
+Existing Xbox profiles are migrated once: an empty D-pad channel is restored,
+left-stick directions inherit the navigation defaults, and the right stick
+gets arrow-key defaults. Non-empty custom direction maps are preserved. The
+direction-learning UI now commits only after all four directions are captured,
+so cancelling the wizard cannot erase an existing map again.
 
 ## Raycast Dictation: hold LT to speak
 
@@ -263,6 +279,59 @@ Together, these traces cover the whole chain: physical Xbox A (`usage 1`) →
 virtual button 1 → `confirm` binding → production `Actions.run` → `KeySynth` →
 macOS receiver key-down (`keyCode 36`).
 
+## Mapping Test Mode
+
+The installed app's Test Mode was enabled from the Mapping toolbar, then a
+mapped controller button was pressed. JoyCoding kept the input and binding
+resolution visible while stopping before action dispatch:
+
+```text
+test mode:     on
+last dispatch: Test button 8: Tap: Open Raycast · Hold: Raycast AI Chat
+front app:     com.meiease.joycoding (JoyCoding)
+```
+
+Without Test Mode, button 8's tap opens Raycast. Here JoyCoding remained
+frontmost, proving that Raycast was not invoked. The
+safety gate also cancels pending tap/hold/repeat timers, releases an already-held
+PTT chord before enabling, and suppresses the release of any press that began in
+Test Mode. Leaving Mapping or closing its Settings window turns the mode off.
+
+The 2026-08-21 physical retest recorded the complete requested direction set in
+Test Mode:
+
+```json
+{
+  "directionsByChannel": {
+    "hat":   [0, 2, 4, 6],
+    "left":  [0, 2, 4, 6],
+    "right": [0, 2, 4, 6]
+  },
+  "suppressed": 36,
+  "actionsDispatched": 0
+}
+```
+
+The same trace records physical View as canonical button 7 and physical Menu as
+canonical button 8. The Profile press between Menu and D-pad produced no button
+event, matching its onboard-profile behavior. Every recognized direction has a
+paired `suppressed` record naming the resolved action, while the trace contains
+zero `action` records. This is the safe-input proof: the HID path, normalization,
+profile lookup, and action resolution all ran, but dispatch did not.
+
+Closing the installed Settings window was also checked through the authenticated
+local state endpoint: `testMode` changed from `true` to `false` and
+`lastDispatch` became `Test Mode off`.
+
+## Controller illustration
+
+The Xbox-specific graphic now uses a dedicated Elite-style shell, an actual
+D-pad, symbolic View/Menu controls, colored ABXY legends, and subtle grip
+materials. Idle analog-direction arrows are intentionally absent; only the
+currently active direction appears during a live press.
+
+![JoyCoding Xbox controller illustration](images/proof/controller-art-v2.jpg)
+
 ## Reproduce
 
 ```bash
@@ -282,8 +351,9 @@ JOYCODING_PROOF_DRY_RUN=1 \
 build/JoyCoding.app/Contents/MacOS/JoyCoding --settings
 ```
 
-Press `A, B, X, Y, LB, RB, View, Menu, Profile`, then LT, RT, and each D-pad
-direction while the final command is running. Inspect `.build/xbox-proof.jsonl`
+Press `A, B, X, Y, LB, RB, View, Menu, Profile`, then LT, RT, each D-pad
+direction, and both analog sticks while the final command is running. Profile
+should produce no HID event. Inspect `.build/xbox-proof.jsonl`
 for the same `rawInput -> canonical button/hat -> binding -> action` chain shown
 above.
 
