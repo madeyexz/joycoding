@@ -86,14 +86,14 @@ stays inert there.
 
 | Controller | Buttons | Notes |
 |---|---|---|
-| Xbox Wireless / Elite | 12 + LT/RT | Bluetooth D-pad and analog triggers normalized; verified with 045E:0B22 |
+| Xbox Wireless / Elite | Model-specific + LT/RT | Product-specific Bluetooth normalization; physically verified with Elite 2 `045E:0B22` |
 | Joy-Con (L) / (R) | 11 | Stick direction must be learned once — it rotates 90° depending on grip |
 | Switch Pro | 13 | macOS claims the Home button for its game overlay |
 | PlayStation | 14–15 | Artwork and defaults ready; button numbering unverified |
 | Any other HID gamepad | — | Mapping works; no illustration |
 
 See the [physical Xbox Bluetooth proof](docs/xbox-proof.md) for the raw HID →
-normalized input → semantic action trace and an unedited live-app capture.
+normalized input → semantic action traces.
 
 ### Xbox layout in this fork
 
@@ -107,7 +107,7 @@ to the apps that dominate the tested workflow:
 | LB | Confirm / send | Slack |
 | RB | Arc | Ghostty |
 | L3 | Cancel | Codex |
-| Share | WeChat | Heptabase |
+| Share / Elite Profile | WeChat | Heptabase |
 | D-pad left / right | Previous / next session or tab | — |
 | X / Y / View in Arc | Reload / Back / Close tab | — |
 

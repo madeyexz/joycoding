@@ -1,4 +1,4 @@
-# Xbox controller proof
+# Xbox Elite Series 2 controller proof
 
 This is a physical-device smoke test, not a fixture. It was captured on
 2026-08-21 from the signed `build/JoyCoding.app` on macOS 26.3 using the Xbox
@@ -10,17 +10,58 @@ Both macOS Bluetooth inventory and a direct `IOHIDManager` probe reported one
 physical gamepad:
 
 ```text
-Xbox Wireless Controller
+Xbox Wireless Controller (reported name)
 transport=Bluetooth Low Energy
 vendor=0x045E product=0x0B22
 virtual=no
 ```
 
+PID `0B22` and the controller's 15-button BLE report descriptor identify this
+device as an Xbox Elite Series 2. JoyCoding now shows that product-specific name
+instead of trusting the generic Bluetooth name.
+
 The app then reported the same device ID, with the built-in Xbox profile seeded:
 
 ```json
-{"deviceID":"045E:0B22","event":"device","mappedButtons":13,"mappedDirections":4,"name":"Xbox Wireless Controller","productID":2850,"vendorID":1118}
+{"deviceID":"045E:0B22","event":"device","mappedButtons":13,"mappedDirections":4,"name":"Xbox Elite Series 2","productID":2850,"vendorID":1118}
 ```
+
+## Elite Series 2 Bluetooth button order
+
+The original fork treated `0B22` like a standard Xbox Series controller. A live
+dry-run capture of the physical sequence `A, B, X, Y, LB, RB, View, Menu,
+Profile` disproved that assumption. The Button-page down events were:
+
+```text
+physical A       -> raw usage 1
+physical B       -> raw usage 2
+physical X       -> raw usage 4
+physical Y       -> raw usage 5
+physical LB      -> raw usage 7
+physical RB      -> raw usage 8
+physical View    -> no handled event in the original build
+physical Menu    -> raw usage 11
+physical Profile -> raw usage 12
+```
+
+The controller's locally read report descriptor exposes View separately as
+Consumer usage `0xB2`; the original input path ignored that page. The gaps are
+real fields in the Elite BLE descriptor, not missing button presses. The fix
+normalizes those raw usages at the input boundary:
+
+```text
+raw 1 -> A (1)       raw 2 -> B (2)
+raw 4 -> X (3)       raw 5 -> Y (4)
+raw 7 -> LB (5)      raw 8 -> RB (6)
+0x0C:0xB2 -> View (7)
+raw 11 -> Menu (8)   raw 12 -> Profile (12)
+raw 13 -> Xbox (11)  raw 14 -> L3 (9)  raw 15 -> R3 (10)
+```
+
+This keeps every stored action on JoyCoding's conventional Xbox IDs. It also
+prevents unused raw usages 3, 6, 9, and 10 from masquerading as real controls.
+The automated suite asserts the full table, the Elite-specific artwork, and the
+unchanged behavior of non-Elite controllers.
 
 ## Physical input to JoyCoding action
 
@@ -172,18 +213,6 @@ Together, these traces cover the whole chain: physical Xbox A (`usage 1`) →
 virtual button 1 → `confirm` binding → production `Actions.run` → `KeySynth` →
 macOS receiver key-down (`keyCode 36`).
 
-## Live app screenshot
-
-The raw capture and annotation have identical dimensions (`2704 x 2032`). The
-annotation is a separate SVG/Sharp overlay; the raw app pixels were not edited.
-
-![Annotated live Xbox mapping](images/proof/xbox-045e-0b22-connected-annotated.jpg)
-
-- [Raw PNG](images/proof/xbox-045e-0b22-connected-raw.png) — SHA-256
-  `272a4cf4480431156205dab3cdb8abcd3ee5609c85e50bccf654a7ef543c6031`
-- Annotated JPEG — SHA-256
-  `d8088d368558edca81aee9e2ae9d9a01b129371a844c05d67621f7739cb5cfa4`
-
 ## Reproduce
 
 ```bash
@@ -201,9 +230,10 @@ JOYCODING_PROOF_DRY_RUN=1 \
 build/JoyCoding.app/Contents/MacOS/JoyCoding --settings
 ```
 
-Press A, LT, RT, and each D-pad direction while the final command is running,
-then inspect `.build/xbox-proof.jsonl` for the same `rawInput -> button/hat ->
-binding -> action` chain shown above.
+Press `A, B, X, Y, LB, RB, View, Menu, Profile`, then LT, RT, and each D-pad
+direction while the final command is running. Inspect `.build/xbox-proof.jsonl`
+for the same `rawInput -> canonical button/hat -> binding -> action` chain shown
+above.
 
 To repeat only the Raycast boundary with the installed app:
 
