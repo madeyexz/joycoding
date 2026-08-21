@@ -114,6 +114,12 @@ case "$ARCHS" in
   *) echo "❌ 缺 arm64 切片, 实际是: $ARCHS"; exit 1;;
 esac
 [ -f icon/AppIcon.icns ] && cp icon/AppIcon.icns "$APP/Contents/Resources/"
+if [ -f Assets/ControllerArt/XboxSeriesController.svg ]; then
+  mkdir -p "$APP/Contents/Resources/ControllerArt"
+  cp Assets/ControllerArt/XboxSeriesController.svg \
+    "$APP/Contents/Resources/ControllerArt/"
+fi
+[ -f THIRD_PARTY_NOTICES.md ] && cp THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

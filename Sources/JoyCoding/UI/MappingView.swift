@@ -17,6 +17,17 @@ struct MappingView: View {
     @State private var stickStep = 0
     @State private var stickDraft: [String: StickDir] = [:]
 
+    /// Deterministic visual-QA hook. This is deliberately launch-only and the
+    /// toolbar labels it as a preview, so screenshots can exercise the exact
+    /// installed mapping UI without claiming a sleeping controller is live.
+    private static let uiPreviewDevice: ConnectedDevice? = {
+        guard ProcessInfo.processInfo.environment["JOYCODING_UI_PREVIEW"] == "xboxElite2"
+        else { return nil }
+        return ConnectedDevice(vendorID: XboxHID.vendorID,
+                               productID: XboxHID.elite2ProductID,
+                               name: "Xbox Elite Series 2")
+    }()
+
     /// (方向键, 默认动作)。提示文案按设备现生成 —— Joy-Con 上是摇杆要"推",
     /// Pro 手柄上这个通道其实是十字键, 得说"按"。
     private let stickWizard: [(String, String)] = [
@@ -54,6 +65,10 @@ struct MappingView: View {
 
     private var device: ConnectedDevice? {
         hid.devices.first { $0.id == selectedID } ?? hid.devices.first
+            ?? Self.uiPreviewDevice
+    }
+    private var isUIPreview: Bool {
+        hid.devices.isEmpty && Self.uiPreviewDevice != nil
     }
     private var profile: DeviceProfile? {
         guard let d = device else { return nil }
@@ -78,7 +93,10 @@ struct MappingView: View {
             }
         }
         .frame(minWidth: 980, minHeight: 640)
-        .onAppear { selectedID = hid.devices.first?.id; watchPresses() }
+        .onAppear {
+            selectedID = hid.devices.first?.id ?? Self.uiPreviewDevice?.id
+            watchPresses()
+        }
         .onDisappear { hid.setTestMode(false); stopWatching() }
         .onChange(of: hid.devices.map(\.id)) { _ in
             if selectedID == nil { selectedID = hid.devices.first?.id }
@@ -90,7 +108,12 @@ struct MappingView: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "gamecontroller.fill").foregroundStyle(.secondary)
-            if hid.devices.isEmpty {
+            if isUIPreview, let d = device {
+                Text("\(d.name)   \(d.id)")
+                    .font(.subheadline.weight(.medium))
+                Circle().fill(.orange).frame(width: 7, height: 7)
+                Text("UI preview").font(.subheadline).foregroundStyle(.secondary)
+            } else if hid.devices.isEmpty {
                 Text(L("未连接手柄")).foregroundStyle(.secondary)
             } else {
                 Picker("", selection: Binding(
@@ -126,7 +149,7 @@ struct MappingView: View {
                 Text(L("只点亮，不执行"))
                     .font(.caption).foregroundStyle(.orange)
             }
-            if let d = device {
+            if let d = device, !isUIPreview {
                 if learningStick {
                     Text(stickStep < stickWizard.count
                          ? stickPrompt(learningCh, stickStep) : "")
