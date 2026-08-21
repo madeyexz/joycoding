@@ -86,10 +86,14 @@ stays inert there.
 
 | Controller | Buttons | Notes |
 |---|---|---|
+| Xbox Wireless / Elite | 12 + LT/RT | Bluetooth D-pad and analog triggers normalized; verified with 045E:0B22 |
 | Joy-Con (L) / (R) | 11 | Stick direction must be learned once — it rotates 90° depending on grip |
 | Switch Pro | 13 | macOS claims the Home button for its game overlay |
 | PlayStation | 14–15 | Artwork and defaults ready; button numbering unverified |
 | Any other HID gamepad | — | Mapping works; no illustration |
+
+See the [physical Xbox Bluetooth proof](docs/xbox-proof.md) for the raw HID →
+normalized input → semantic action trace and an unedited live-app capture.
 
 ## Install
 
@@ -151,7 +155,7 @@ matter of filling in a table rather than changing code.
 
 ## Known limits
 
-- **Home / PS button** is captured by macOS for its game overlay. Nothing an app
+- **Home / PS / Xbox button** is captured by macOS for its game overlay. Nothing an app
   can do short of seizing the device exclusively, which would break games.
 - **Joy-Con stick direction** must be learned — the HID hat switch is defined for
   sideways play, so holding it upright rotates every direction by 90°.
