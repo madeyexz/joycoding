@@ -35,12 +35,12 @@ None of that needs a keyboard. JoyCoding maps that loop onto a controller:
 - Works with **any HID gamepad** — Joy-Con (L/R), Switch Pro, PlayStation, and more
 - **Two independent layers of per-app behaviour** (see below)
 - **Tap / double-tap / long-press** on every button
-- **Push-to-talk** that can synthesize a bare modifier key (e.g. hold left Control)
+- **Push-to-talk** that preserves sided shortcut chords (including Right Shift + Return)
 - **Phone remote** over your LAN — pair once with a 6-digit code
 - **Battery level** for Nintendo controllers (macOS does not expose this; see [docs](docs/battery.md))
 - Live button highlighting while you map, so you never guess a button number
-- **Key profiles for 9 apps out of the box** — Claude Code, ChatGPT, Cursor,
-  VS Code, Ghostty, iTerm2, Terminal, Chrome, WeChat
+- **Key profiles for 10 apps out of the box** — Claude Code, ChatGPT, Cursor,
+  VS Code, Ghostty, iTerm2, Terminal, Chrome, Arc, WeChat
 - Ships with sensible defaults — plug in a controller and it just works
 
 ## Two layers, and why
@@ -94,6 +94,25 @@ stays inert there.
 
 See the [physical Xbox Bluetooth proof](docs/xbox-proof.md) for the raw HID →
 normalized input → semantic action trace and an unedited live-app capture.
+
+### Xbox layout in this fork
+
+The default Xbox profile keeps the original tap actions and adds direct access
+to the apps that dominate the tested workflow:
+
+| Control | Tap | Hold / app-specific |
+|---|---|---|
+| LT | Raycast Dictation PTT | Hold sends Right Shift + Return; release stops |
+| RT | Previous app | — |
+| LB | Confirm / send | Slack |
+| RB | Arc | Ghostty |
+| L3 | Cancel | Codex |
+| Share | WeChat | Heptabase |
+| D-pad left / right | Previous / next session or tab | — |
+| X / Y / View in Arc | Reload / Back / Close tab | — |
+
+The Raycast screenshots and exact event sequence are included in the
+[Xbox proof](docs/xbox-proof.md#raycast-dictation-hold-lt-to-speak).
 
 ## Install
 

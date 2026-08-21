@@ -1,0 +1,33 @@
+{
+  "annotations": [
+    {
+      "type": "rect",
+      "x": 1640,
+      "y": 1936,
+      "width": 320,
+      "height": 165,
+      "style": "solid",
+      "label": "DICTATION ACTIVE WHILE LT IS HELD"
+    },
+    {
+      "type": "callout",
+      "x": 2380,
+      "y": 300,
+      "width": 520,
+      "badge": "MACOS SIGNAL",
+      "title": "Raycast Beta owns the microphone",
+      "body": [
+        "The orange menu-bar microphone and the live",
+        "Dictation Pill appear during JoyCoding PTT."
+      ],
+      "target": [
+        3058,
+        40
+      ]
+    }
+  ],
+  "output": {
+    "quality": 94,
+    "chromaSubsampling": "4:4:4"
+  }
+}

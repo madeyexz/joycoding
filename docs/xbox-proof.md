@@ -83,6 +83,64 @@ centred. JoyCoding now normalizes it to its existing zero-based clockwise form.
 {"action":"sessionPrev","event":"action"}
 ```
 
+## Raycast Dictation: hold LT to speak
+
+This fork defaults the voice shortcut to the exact binding configured in
+Raycast Beta on the test Mac:
+
+```json
+{"pttStyle":"hold","pttKey":"return","pttMods":["rightshift"]}
+```
+
+Raycast's Dictation settings displayed **Right Shift + Return** for the Dictate
+command. JoyCoding therefore emits the sided modifier as a real key-code 60
+`flagsChanged` event, followed by Return key-code 36. The right-side flag is
+preserved in addition to the ordinary Shift flag; emitting only generic Shift
+does not match this Raycast shortcut.
+
+The event-plan test asserts this exact sequence in both directions:
+
+```text
+LT down:  flagsChanged(keyCode=60, RightShift) -> keyDown(keyCode=36, RightShift)
+LT up:    keyUp(keyCode=36, RightShift) -> flagsChanged(keyCode=60, none)
+```
+
+The physical trace above proves that Xbox LT (`usage 197`) resolves to
+`pttStart` and `pttStop`. The screenshot pair below separately exercises those
+same two `Actions` entry points through JoyCoding's authenticated localhost
+remote. Splitting the proof this way makes the Raycast boundary repeatable
+without claiming that the screenshot itself was triggered by a controller
+press.
+
+### While PTT is held
+
+The unedited raw capture shows two independent system/UI signals: Raycast's
+orange microphone indicator in the menu bar and its live Dictation Pill near
+the bottom of the screen.
+
+![Raycast Dictation active while LT is held](images/proof/raycast-dictation-held-annotated.jpg)
+
+- [Raw held PNG](images/proof/raycast-dictation-held-raw.png) — SHA-256
+  `8d73db2a3f06643ab34943cbf0dedce84768cf79f001b181ff83e0167cdf8bed`
+- Annotated held JPEG — SHA-256
+  `b424be27b09d109c6ca5c396841c4b50f64b431b8815c9a95eb39e96b6525b00`
+
+### After PTT is released
+
+Four seconds after `pttStop`, both the orange microphone indicator and the
+Dictation Pill are absent.
+
+![Raycast Dictation stopped after LT is released](images/proof/raycast-dictation-released-annotated.jpg)
+
+- [Raw released PNG](images/proof/raycast-dictation-released-raw.png) — SHA-256
+  `39fbf54700f119e6a8b472b30133f02e0780039e59a8a9687cd7ad261a553458`
+- Annotated released JPEG — SHA-256
+  `1a113679f8718da790c331a42f15e56018c27d7e363b5953b2a2148b54109ea9`
+
+Both raw and annotated captures are `3600 x 2338`. The annotations are
+deterministic SVG/Sharp overlays described by the adjacent JSON specs; the raw
+pixels and hashes remain untouched.
+
 ## Actual macOS event delivery
 
 The physical traces above used dry-run mode to prevent accidental input in an
@@ -146,3 +204,12 @@ build/JoyCoding.app/Contents/MacOS/JoyCoding --settings
 Press A, LT, RT, and each D-pad direction while the final command is running,
 then inspect `.build/xbox-proof.jsonl` for the same `rawInput -> button/hat ->
 binding -> action` chain shown above.
+
+To repeat only the Raycast boundary with the installed app:
+
+```bash
+token=$(jq -r '.httpToken' ~/.config/joycoding/config.json)
+curl -fsS "http://127.0.0.1:27123/$token/pttStart"
+# Raycast microphone indicator and Dictation Pill should now be visible.
+curl -fsS "http://127.0.0.1:27123/$token/pttStop"
+```
