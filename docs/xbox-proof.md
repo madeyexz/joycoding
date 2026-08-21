@@ -83,6 +83,37 @@ centred. JoyCoding now normalizes it to its existing zero-based clockwise form.
 {"action":"sessionPrev","event":"action"}
 ```
 
+## Actual macOS event delivery
+
+The physical traces above used dry-run mode to prevent accidental input in an
+uncontrolled frontmost app. The final `CGEvent` boundary was tested separately
+after macOS Accessibility permission was granted, using the focused receiver in
+`tools/keyreceiver` and JoyCoding's authenticated localhost remote. The remote
+calls the same `Actions.run("confirm")` function that the physical A binding
+resolved above.
+
+Preflight proved the receiver was the target before sending anything:
+
+```json
+{"app":"dev.joycoding.proofreceiver","inTarget":true}
+```
+
+JoyCoding then returned:
+
+```text
+ok: confirm (front=dev.joycoding.proofreceiver)
+```
+
+The focused AppKit receiver recorded the actual synthesized Return key:
+
+```json
+{"characters":"\r","event":"keyDown","keyCode":36,"time":"2026-08-21T09:46:52Z"}
+```
+
+Together, these traces cover the whole chain: physical Xbox A (`usage 1`) →
+virtual button 1 → `confirm` binding → production `Actions.run` → `KeySynth` →
+macOS receiver key-down (`keyCode 36`).
+
 ## Live app screenshot
 
 The raw capture and annotation have identical dimensions (`2704 x 2032`). The
@@ -103,6 +134,8 @@ swift test
 
 swiftc -O tools/hidprobe/main.swift -framework IOKit -o .build/hidprobe
 .build/hidprobe 15
+
+tools/keyreceiver/build.sh
 
 JOYCODING_CONFIG_DIR="$PWD/.build/proof-config" \
 JOYCODING_PROOF_LOG="$PWD/.build/xbox-proof.jsonl" \
