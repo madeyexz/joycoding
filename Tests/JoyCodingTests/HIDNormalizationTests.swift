@@ -147,6 +147,12 @@ final class HIDNormalizationTests: XCTestCase {
                        "ampPreviousThread")
         XCTAssertEqual(profile.overrides[BundleID.amp]?.sticks["hat"]?["down"],
                        "ampNextThread")
+        XCTAssertEqual(profile.overrides[BundleID.codex]?.sticks["hat"]?["up"],
+                       "codexPreviousThread")
+        XCTAssertEqual(profile.overrides[BundleID.codex]?.sticks["hat"]?["down"],
+                       "codexNextThread")
+        XCTAssertEqual(profile.overrides[BundleID.wechat]?.sticks["hat"]?["up"], "up")
+        XCTAssertEqual(profile.overrides[BundleID.wechat]?.sticks["hat"]?["down"], "down")
         XCTAssertEqual(profile.sticks["left"]?["up"],
                        StickDir(hat: 0, action: "focusPrevious"))
         XCTAssertEqual(profile.sticks["left"]?["right"],
@@ -214,7 +220,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].buttons["5"]?.tap, "appCyclePrevious")
         XCTAssertEqual(config.devices[0].buttons["5"]?.long, "raycastSlack")
         XCTAssertEqual(config.devices[0].buttons["6"],
@@ -245,7 +251,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].sticks["hat"], customHat)
         XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.leftStickSelection)
         XCTAssertEqual(config.devices[0].sticks["right"], DefaultProfiles.rightStick)
@@ -263,7 +269,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].buttons["5"],
                        ButtonBinding(tap: "customLB", long: "raycastSlack"))
         XCTAssertEqual(config.devices[0].buttons["6"],
@@ -287,7 +293,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].buttons["9"],
                        ButtonBinding(tap: "selectFocused", long: "raycastCodex"))
         XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.leftStickSelection)
@@ -318,7 +324,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].overrides[BundleID.amp]?.buttons["8"],
                        ButtonBinding(tap: "ampNewSession", long: "raycastAIChat"))
         XCTAssertEqual(config.devices[0].sticks["hat"], DefaultProfiles.dpad)
@@ -346,12 +352,50 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 6)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
         XCTAssertEqual(config.devices[0].sticks["hat"], DefaultProfiles.dpad)
         XCTAssertEqual(config.devices[0].overrides[BundleID.amp]?.sticks["hat"]?["up"],
                        "ampPreviousThread")
         XCTAssertEqual(config.devices[0].overrides[BundleID.amp]?.sticks["hat"]?["down"],
                        "ampNextThread")
+    }
+
+    func testCodexDPadMigrationPreservesCustomDirection() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 6
+        var profile = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Elite Series 2")
+        profile.overrides[BundleID.codex] = AppOverride(sticks: [
+            "hat": ["up": "customCodexUp"],
+        ])
+        config.devices = [profile]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.devices[0].overrides[BundleID.codex]?.sticks["hat"]?["up"],
+                       "customCodexUp")
+        XCTAssertEqual(config.devices[0].overrides[BundleID.codex]?.sticks["hat"]?["down"],
+                       "codexNextThread")
+    }
+
+    func testWeChatDPadMigrationPreservesCustomDirection() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 7
+        var profile = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Elite Series 2")
+        profile.overrides[BundleID.wechat] = AppOverride(sticks: [
+            "hat": ["up": "customWeChatUp"],
+        ])
+        config.devices = [profile]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.devices[0].overrides[BundleID.wechat]?.sticks["hat"]?["up"],
+                       "customWeChatUp")
+        XCTAssertEqual(config.devices[0].overrides[BundleID.wechat]?.sticks["hat"]?["down"],
+                       "down")
     }
 
     func testCommandAppSwitcherChordKeepsAAsTapAndConsumesShoulders() {

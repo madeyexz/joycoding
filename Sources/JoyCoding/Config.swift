@@ -242,12 +242,12 @@ struct Config: Codable {
     var devices: [DeviceProfile] = []
     /// Versioned so an existing Elite profile gets each shipped Base-layer update
     /// once without repeatedly overwriting later user customization.
-    var xboxRaycastPresetVersion = 6
+    var xboxRaycastPresetVersion = 8
 
     mutating func migrateXboxRaycastPresetIfNeeded() {
-        guard xboxRaycastPresetVersion < 6 else { return }
+        guard xboxRaycastPresetVersion < 8 else { return }
         let oldVersion = xboxRaycastPresetVersion
-        defer { xboxRaycastPresetVersion = 6 }
+        defer { xboxRaycastPresetVersion = 8 }
         for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
             func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
                          from old: String?, to new: String) {
@@ -351,6 +351,36 @@ struct Config: Codable {
                 }
                 override.sticks[StickChannel.hat.rawValue] = hat
                 devices[index].overrides[BundleID.amp] = override
+            }
+
+            if oldVersion < 7 {
+                // Codex uses its own thread-navigation shortcuts. Fill only
+                // missing directions so a user's app-specific mapping wins.
+                var override = devices[index].overrides[BundleID.codex] ?? AppOverride()
+                var hat = override.sticks[StickChannel.hat.rawValue] ?? [:]
+                if hat["up"] == nil {
+                    hat["up"] = "codexPreviousThread"
+                }
+                if hat["down"] == nil {
+                    hat["down"] = "codexNextThread"
+                }
+                override.sticks[StickChannel.hat.rawValue] = hat
+                devices[index].overrides[BundleID.codex] = override
+            }
+
+            if oldVersion < 8 {
+                // WeChat's composer history uses unmodified arrow keys. Keep
+                // this in the WeChat layer and preserve custom directions.
+                var override = devices[index].overrides[BundleID.wechat] ?? AppOverride()
+                var hat = override.sticks[StickChannel.hat.rawValue] ?? [:]
+                if hat["up"] == nil {
+                    hat["up"] = "up"
+                }
+                if hat["down"] == nil {
+                    hat["down"] = "down"
+                }
+                override.sticks[StickChannel.hat.rawValue] = hat
+                devices[index].overrides[BundleID.wechat] = override
             }
         }
     }

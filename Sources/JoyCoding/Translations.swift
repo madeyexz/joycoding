@@ -63,6 +63,8 @@ enum Translations {
         "Amp 新建会话": "Amp new session",
         "Amp 上一个侧边栏线程": "Amp previous sidebar thread",
         "Amp 下一个侧边栏线程": "Amp next sidebar thread",
+        "Codex 上一个线程": "Codex previous thread",
+        "Codex 下一个线程": "Codex next thread",
         "切换模型": "Model menu",
         "Claude 开菜单 / Codex 打 /model": "Menu in Claude, /model in Codex",
         "切换 effort": "Effort menu",

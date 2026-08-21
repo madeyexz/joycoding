@@ -165,6 +165,14 @@ enum Actions {
                   group: "ampcode", repeatable: true, onlyIn: BundleID.amp) {
             key(["ctrl", "alt"], "down")
         },
+        ActionDef("codexPreviousThread", L("Codex 上一个线程"), "Option+Cmd+↑",
+                  group: "Codex", repeatable: true, onlyIn: BundleID.codex) {
+            key(["alt", "cmd"], "up")
+        },
+        ActionDef("codexNextThread", L("Codex 下一个线程"), "Option+Cmd+↓",
+                  group: "Codex", repeatable: true, onlyIn: BundleID.codex) {
+            key(["alt", "cmd"], "down")
+        },
         ActionDef("modelMenu", L("切换模型"), L("Claude 开菜单 / Codex 打 /model"), group: "Claude Code") {
             send("modelMenu")
         },

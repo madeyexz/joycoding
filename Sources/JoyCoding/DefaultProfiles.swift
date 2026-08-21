@@ -105,6 +105,18 @@ enum DefaultProfiles {
                         "down": "ampNextThread",
                     ],
                 ]),
+            BundleID.codex: AppOverride(sticks: [
+                StickChannel.hat.rawValue: [
+                    "up": "codexPreviousThread",
+                    "down": "codexNextThread",
+                ],
+            ]),
+            BundleID.wechat: AppOverride(sticks: [
+                StickChannel.hat.rawValue: [
+                    "up": "up",
+                    "down": "down",
+                ],
+            ]),
         ]
         return p
     }
