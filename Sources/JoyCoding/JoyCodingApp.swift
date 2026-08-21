@@ -150,9 +150,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A visible window also keeps the opt-in physical-input proof run alive.
             SettingsWindow.shared.show(tab: .mapping)
         } else if !configured || CommandLine.arguments.contains("--settings") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                SettingsWindow.shared.show()
-            }
+            // Opening synchronously also keeps a fresh menu-bar launch alive on
+            // macOS versions that may otherwise exit before a delayed block runs.
+            SettingsWindow.shared.show()
         }
     }
 }
