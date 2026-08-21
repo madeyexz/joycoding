@@ -56,6 +56,7 @@ final class SettingsWindow {
     private var window: NSWindow?
 
     func show(tab: SettingsNav.Tab? = nil) {
+        HIDProof.shared.record("settingsWindow", ["stage": "show"])
         if let tab { SettingsNav.shared.tab = tab }
         NSApp.activate(ignoringOtherApps: true)
 
@@ -75,6 +76,9 @@ final class SettingsWindow {
         w.isReleasedWhenClosed = false
         window = w
         w.makeKeyAndOrderFront(nil)
+        HIDProof.shared.record("settingsWindow", [
+            "stage": "visible", "windowNumber": w.windowNumber,
+        ])
     }
 }
 
@@ -129,7 +133,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 只触发系统授权提示, 不弹自己的模态框 —— 模态框会阻塞后面的启动流程,
         // HTTP 服务就起不来了; 而且每次启动都弹很烦。状态在菜单栏和设置里显示。
-        if !KeySynth.hasAccessibility { KeySynth.requestAccessibility() }
+        if !HIDProof.shared.dryRun && !KeySynth.hasAccessibility {
+            KeySynth.requestAccessibility()
+        }
 
         Appearance.apply(ConfigStore.shared.config.appearance)
 
@@ -140,7 +146,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 一条映射都没有 = 还没配过, 直接把设置摆出来, 省得对方找不到入口。
         // 也支持 --settings 从命令行直接开 (调试和写脚本方便)
         let configured = ConfigStore.shared.config.devices.contains { !$0.buttons.isEmpty }
-        if !configured || CommandLine.arguments.contains("--settings") {
+        if HIDProof.shared.enabled {
+            // A visible window also keeps the opt-in physical-input proof run alive.
+            SettingsWindow.shared.show(tab: .mapping)
+        } else if !configured || CommandLine.arguments.contains("--settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 SettingsWindow.shared.show()
             }

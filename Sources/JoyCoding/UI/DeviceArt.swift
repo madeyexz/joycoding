@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum AnchorShape { case circle, capsuleH, capsuleV }
+enum AnchorKind { case auto, button, stick, home, share, touchpad }
 
 /// 摇杆四向的虚拟锚点 id。用负数, 和真实按键编号错开。
 enum StickAnchor {
@@ -20,10 +21,11 @@ struct ButtonAnchor: Identifiable {
     let size: CGSize
     let shape: AnchorShape
     let side: Side
+    var kind: AnchorKind = .auto
 }
 
-/// 手柄外观 + 按键锚点。目前有 Joy-Con (R) 和 PlayStation 两套。
-enum BodyStyle { case joycon, proController, playstation }
+/// 手柄外观 + 按键锚点。内置 Joy-Con、Switch Pro、PlayStation 和 Xbox。
+enum BodyStyle { case joycon, proController, playstation, xbox }
 
 struct DeviceArt {
     let anchors: [ButtonAnchor]
@@ -44,6 +46,7 @@ struct DeviceArt {
     /// 左右 Joy-Con 是两个不同的设备, 产品 ID 也不同, 各画各的。
     static func art(vendor: Int, product: Int) -> DeviceArt {
         switch (vendor, product) {
+        case (XboxHID.vendorID, _): return xbox
         case (0x057E, 0x2006): return joyconLeft
         case (0x057E, 0x2007): return joyconRight
         case (0x057E, 0x2009): return proController
@@ -163,6 +166,53 @@ struct DeviceArt {
                   size: .init(width: 0.048, height: 0.070), shape: .circle, side: .right),
         ],
         aspect: 1.45, railSide: nil, style: .proController, hatLabel: L("十字键"))
+
+    /// Xbox Wireless / Elite layout. The HID button IDs and trigger axes were
+    /// verified against Microsoft's Bluetooth descriptor (VID 045E, PID 0B22).
+    static let xbox = DeviceArt(
+        anchors: [
+            .init(id: XboxHID.leftTriggerButton, label: "LT", pos: .init(x: 0.180, y: 0.018),
+                  size: .init(width: 0.16, height: 0.036), shape: .capsuleH, side: .left),
+            .init(id: 5, label: "LB", pos: .init(x: 0.200, y: 0.072),
+                  size: .init(width: 0.18, height: 0.042), shape: .capsuleH, side: .left),
+            .init(id: XboxHID.rightTriggerButton, label: "RT", pos: .init(x: 0.820, y: 0.018),
+                  size: .init(width: 0.16, height: 0.036), shape: .capsuleH, side: .right),
+            .init(id: 6, label: "RB", pos: .init(x: 0.800, y: 0.072),
+                  size: .init(width: 0.18, height: 0.042), shape: .capsuleH, side: .right),
+
+            .init(id: 9, label: L("左摇杆按下"), pos: .init(x: 0.245, y: 0.300),
+                  size: .init(width: 0.155, height: 0.225), shape: .circle, side: .left,
+                  kind: .stick),
+            .init(id: StickChannel.hat.anchorID, label: L("十字键"),
+                  pos: .init(x: 0.335, y: 0.560),
+                  size: .init(width: 0.13, height: 0.19), shape: .circle, side: .left),
+
+            // Xbox face layout: Y top / X left / B right / A bottom.
+            .init(id: 4, label: "Y", pos: .init(x: 0.775, y: 0.235),
+                  size: .init(width: 0.072, height: 0.105), shape: .circle, side: .right),
+            .init(id: 3, label: "X", pos: .init(x: 0.692, y: 0.305),
+                  size: .init(width: 0.072, height: 0.105), shape: .circle, side: .left),
+            .init(id: 2, label: "B", pos: .init(x: 0.858, y: 0.305),
+                  size: .init(width: 0.072, height: 0.105), shape: .circle, side: .right),
+            .init(id: 1, label: "A", pos: .init(x: 0.775, y: 0.375),
+                  size: .init(width: 0.072, height: 0.105), shape: .circle, side: .right),
+
+            .init(id: 10, label: L("右摇杆按下"), pos: .init(x: 0.648, y: 0.560),
+                  size: .init(width: 0.155, height: 0.225), shape: .circle, side: .right,
+                  kind: .stick),
+
+            .init(id: 7, label: "View", pos: .init(x: 0.398, y: 0.250),
+                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .left),
+            .init(id: 8, label: "Menu", pos: .init(x: 0.602, y: 0.250),
+                  size: .init(width: 0.050, height: 0.072), shape: .circle, side: .right),
+            .init(id: 12, label: "Share", pos: .init(x: 0.500, y: 0.365),
+                  size: .init(width: 0.048, height: 0.070), shape: .circle, side: .left,
+                  kind: .share),
+            .init(id: 11, label: "Xbox", pos: .init(x: 0.500, y: 0.485),
+                  size: .init(width: 0.058, height: 0.084), shape: .circle, side: .right,
+                  kind: .home),
+        ],
+        aspect: 1.45, railSide: nil, style: .xbox, hatLabel: L("十字键"))
 
     /// PlayStation 手柄 (DualShock 4 / DualSense)。
     ///
@@ -311,7 +361,7 @@ struct DeviceBody: View {
 
     private func bodyPath(_ w: CGFloat, _ h: CGFloat) -> Path {
         if art.style == .playstation { return psPath(w, h) }
-        if art.style == .proController { return proPath(w, h) }
+        if art.style == .proController || art.style == .xbox { return proPath(w, h) }
         let rS = w * 0.12, rB = w * 0.46
         var p = Path()
         // 滑轨在右边时整条机身左右翻一下 (左 Joy-Con)
@@ -362,13 +412,13 @@ struct DeviceBody: View {
     // 顶部肩键: ZR 在后, R 在前
     private func shoulders(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
-            if let zr = art.anchors.first(where: { $0.id == 16 }) {
+            if art.anchors.contains(where: { $0.id == 16 }) {
                 Capsule()
                     .fill(fillColor(16).opacity(0.85))
                     .frame(width: w * 0.70, height: h * 0.022)
                     .position(x: w * 0.52, y: h * 0.008)
             }
-            if let r = art.anchors.first(where: { $0.id == 15 }) {
+            if art.anchors.contains(where: { $0.id == 15 }) {
                 Capsule()
                     .fill(fillColor(15))
                     .frame(width: w * 0.86, height: h * 0.030)
@@ -425,10 +475,18 @@ struct DeviceBody: View {
         let cx = a.pos.x * w, cy = a.pos.y * h
         let bw = a.size.width * w, bh = a.size.height * h
         let hot = highlighted == a.id
+        let kind: AnchorKind = {
+            if a.kind != .auto { return a.kind }
+            if art.style == .playstation && a.id == 14 { return .touchpad }
+            if a.id == 11 || a.id == 12 { return .stick }
+            if a.id == 13 { return .home }
+            if a.id == 14 { return .share }
+            return .button
+        }()
 
         ZStack {
-            switch a.id {
-            case 11, 12:    // 摇杆: 底座 + 帽子, 做出立体感
+            switch kind {
+            case .stick:    // 摇杆: 底座 + 帽子, 做出立体感
                 Circle().fill(Color.black.opacity(0.45))
                     .frame(width: bw, height: bw)
                 Circle()
@@ -439,40 +497,42 @@ struct DeviceBody: View {
                 Circle().stroke(Color.white.opacity(0.12), lineWidth: 1)
                     .frame(width: bw * 0.74, height: bw * 0.74)
 
-            case 13, 14:    // Home / 截图键: 外圈 + 图标
+            case .home, .share:    // Home / Share / 截图键: 外圈 + 图标
                 Circle().stroke(Color.white.opacity(hot ? 0.9 : 0.20), lineWidth: 1.5)
                     .frame(width: bw * 1.55, height: bw * 1.55)
                 Circle().fill(fillColor(a.id)).frame(width: bw, height: bw)
-                Image(systemName: a.id == 13 ? "house.fill" : "square.fill")
+                Image(systemName: kind == .home ? "house.fill" : "square.fill")
                     .font(.system(size: max(5, bw * 0.5)))
                     .foregroundStyle(Color.black.opacity(0.5))
 
-            case 14 where art.style == .playstation:   // 触摸板: 大方块
+            case .touchpad:   // 触摸板: 大方块
                 RoundedRectangle(cornerRadius: bh * 0.22)
                     .fill(fillColor(14)).frame(width: bw, height: bh)
                 RoundedRectangle(cornerRadius: bh * 0.22)
                     .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     .frame(width: bw, height: bh)
 
-            case _ where a.shape != .circle:   // SL/SR、肩键、扳机: 胶囊形
+            case .button where a.shape != .circle:   // SL/SR、肩键、扳机: 胶囊形
                 Capsule().fill(fillColor(a.id)).frame(width: bw, height: bh)
                 if bw > 22 {
                     Text(a.label).font(.system(size: 8, weight: .bold))
                         .foregroundStyle(Color.black.opacity(0.5))
                 }
 
-            default:    // 面键 + 加减号
+            case .button:    // 面键 + 加减号
                 Circle().fill(fillColor(a.id)).frame(width: bw, height: bw)
-                if a.id != 10 && a.id != 9 {
+                if a.label != "+" && a.label != "−" {
                     Text(a.label)
                         .font(.system(size: max(7, bw * 0.55), weight: .bold, design: .rounded))
                         .foregroundStyle(Color.black.opacity(0.55))
                 } else {
-                    // id 9 是减号, 10 才是加号 —— 之前两个都画了 plus
-                    Image(systemName: a.id == 9 ? "minus" : "plus")
+                    Image(systemName: a.label == "−" ? "minus" : "plus")
                         .font(.system(size: max(5, bw * 0.6), weight: .bold))
                         .foregroundStyle(Color.black.opacity(0.5))
                 }
+
+            case .auto:
+                EmptyView()
             }
 
             if hot {

@@ -33,8 +33,9 @@ final class HIDInput: ObservableObject {
     @Published private(set) var inputCount = 0
 
     private var manager: IOHIDManager?
-    private var lastButton: [Int: Int] = [:]
+    private var lastButton: [String: Int] = [:]
     private var lastHat: [String: Int?] = [:]   // 通道 -> 上次方向
+    private var triggerState: [String: Bool] = [:]
     /// 走原始报告解析的设备。这些设备的标准 HID 元素不再上报,
     /// 也不能让元素路径和原始路径同时派发, 否则会触发两次。
     private var rawDevices: Set<String> = []
@@ -115,6 +116,12 @@ final class HIDInput: ObservableObject {
             let dev = ConnectedDevice(vendorID: v, productID: p, name: n)
             JoyConBattery.shared.attach(d, id: dev.id)
             HIDInput.seedDefaults(dev)
+            let profile = ConfigStore.shared.config.devices.first { $0.id == dev.id }
+            HIDProof.shared.record("device", [
+                "name": n, "vendorID": v, "productID": p,
+                "deviceID": dev.id, "mappedButtons": profile?.buttons.count ?? 0,
+                "mappedDirections": profile?.sticks.values.reduce(0) { $0 + $1.count } ?? 0,
+            ])
             return dev
         }.sorted { $0.name < $1.name }
 
@@ -134,37 +141,61 @@ final class HIDInput: ObservableObject {
         // 电量轮询的产物, 混在里面会盖掉真正的按键记录。
         let dev = IOHIDElementGetDevice(elem)
         let name = IOHIDDeviceGetProperty(dev, kIOHIDProductKey as CFString) as? String ?? "?"
-        if page == UInt32(kHIDPage_Button) || page == UInt32(kHIDPage_GenericDesktop) {
+        if page == UInt32(kHIDPage_Button) || page == UInt32(kHIDPage_GenericDesktop)
+            || page == UInt32(XboxHID.simulationPage) {
             DispatchQueue.main.async {
                 self.inputCount += 1
                 self.lastInput = "#\(self.inputCount) \(name) page=0x\(String(page, radix: 16)) "
                     + "usage=\(usage) v=\(v)"
             }
+            HIDProof.shared.record("rawInput", [
+                "name": name, "usagePage": Int(page), "usage": usage, "value": v,
+                "logicalMin": IOHIDElementGetLogicalMin(elem),
+                "logicalMax": IOHIDElementGetLogicalMax(elem),
+            ])
         }
-        if let v = IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int,
-           let pid = IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int,
-           rawDevices.contains(DeviceProfile.key(v, pid)) {
+        let vendor = IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int
+        let product = IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int
+        let devID = vendor.flatMap { v0 in product.map { DeviceProfile.key(v0, $0) } } ?? ""
+
+        if rawDevices.contains(devID) {
             return      // 这只手柄走原始报告, 元素事件丢弃
         }
 
         // 摇杆走帽子开关, 逻辑范围 0...7, 越界即回中
         if page == UInt32(kHIDPage_GenericDesktop) && usage == 0x39 {
-            let dir = (v >= 0 && v <= 7) ? v : nil
-            if lastHat[StickChannel.hat.rawValue] ?? -1 == dir { return }
-            lastHat[StickChannel.hat.rawValue] = dir
-            let devID = (IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int)
-                .flatMap { v0 in (IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int)
-                    .map { DeviceProfile.key(v0, $0) } } ?? ""
+            let dir = HIDNormalization.hat(
+                raw: v,
+                logicalMin: IOHIDElementGetLogicalMin(elem),
+                logicalMax: IOHIDElementGetLogicalMax(elem))
+            let key = "\(devID)/\(StickChannel.hat.rawValue)"
+            if lastHat[key] ?? -1 == dir { return }
+            lastHat[key] = dir
             DispatchQueue.main.async { self.onHat(dir, device: devID, ch: .hat) }
             return
         }
 
+        // Xbox LT/RT are analog axes, not Button-page elements. Expose them as
+        // ordinary buttons so tap/hold/PTT semantics need no Xbox-specific path.
+        if let vendor,
+           let button = XboxHID.virtualButton(vendor: vendor, usagePage: Int(page), usage: usage) {
+            let key = "\(devID)/axis/\(usage)"
+            let wasPressed = triggerState[key] ?? false
+            let pressed = HIDNormalization.triggerPressed(
+                raw: v,
+                logicalMin: IOHIDElementGetLogicalMin(elem),
+                logicalMax: IOHIDElementGetLogicalMax(elem),
+                wasPressed: wasPressed)
+            guard pressed != wasPressed else { return }
+            triggerState[key] = pressed
+            DispatchQueue.main.async { self.onButton(button, down: pressed, device: devID) }
+            return
+        }
+
         guard page == UInt32(kHIDPage_Button) else { return }
-        if lastButton[usage] == v { return }        // 去抖
-        lastButton[usage] = v
-        let devID = (IOHIDDeviceGetProperty(dev, kIOHIDVendorIDKey as CFString) as? Int)
-            .flatMap { v0 in (IOHIDDeviceGetProperty(dev, kIOHIDProductIDKey as CFString) as? Int)
-                .map { DeviceProfile.key(v0, $0) } } ?? ""
+        let buttonKey = "\(devID)/\(usage)"
+        if lastButton[buttonKey] == v { return }        // 去抖
+        lastButton[buttonKey] = v
         DispatchQueue.main.async { self.onButton(usage, down: v == 1, device: devID) }
     }
 
@@ -200,22 +231,32 @@ final class HIDInput: ObservableObject {
     // MARK: - 按键手势
 
     private func onButton(_ n: Int, down: Bool, device: String) {
+        HIDProof.shared.record("button", ["deviceID": device, "button": n, "down": down])
         previewHandler?(.button(n, down: down))
         // 覆盖优先, 回落基础层
         let app = AppContext.shared.frontBundle
         guard let prof = profile(device) else {
+            HIDProof.shared.record("unmapped", ["deviceID": device, "button": n, "reason": "noProfile"])
             if down { lastDispatch = L("按键%@ [%@] 找不到配置", String(n), device) }
             return
         }
         guard let b = prof.binding(button: n, app: app), !b.isEmpty else {
+            HIDProof.shared.record("unmapped", ["deviceID": device, "button": n, "reason": "noBinding"])
             if down { lastDispatch = L("按键%@ [%@] 没绑动作", String(n), device) }
             return
         }
-        if down { lastDispatch = L("按键 %@ [%@] -> %@", String(n), device, b.tap ?? "?") }
+        if down {
+            lastDispatch = L("按键 %@ [%@] -> %@", String(n), device, b.tap ?? "?")
+            HIDProof.shared.record("binding", [
+                "deviceID": device, "button": n, "action": b.tap ?? "?", "app": app,
+            ])
+        }
 
         // 语音是按下/松开语义, 不参与单击双击长按
         if b.tap == "ptt" {
-            down ? Actions.pttStart() : Actions.pttStop()
+            proofAction(down ? "pttStart" : "pttStop") {
+                down ? Actions.pttStart() : Actions.pttStop()
+            }
             return
         }
 
@@ -226,7 +267,7 @@ final class HIDInput: ObservableObject {
             if let long = b.long {
                 longTimers[n] = Timer.scheduledTimer(withTimeInterval: longDelay, repeats: false) { _ in
                     self.longFired.insert(n)
-                    Actions.run(long)
+                    self.runAction(long)
                 }
             } else if let tap = b.tap, b.double == nil, Actions.isRepeatable(tap) {
                 // 没绑长按才连发, 否则两者会打架
@@ -239,16 +280,16 @@ final class HIDInput: ObservableObject {
 
             guard let tap = b.tap else { return }
 
-            guard b.double != nil else { Actions.run(tap); return }
+            guard b.double != nil else { runAction(tap); return }
 
             // 绑了双击才需要等 —— 否则每次单击都白白多等 0.28 秒
             if let pending = pendingTap[n] {
                 pending.invalidate(); pendingTap[n] = nil
-                Actions.run(b.double!)
+                runAction(b.double!)
             } else {
                 pendingTap[n] = Timer.scheduledTimer(withTimeInterval: doubleWindow, repeats: false) { _ in
                     self.pendingTap[n] = nil
-                    Actions.run(tap)
+                    self.runAction(tap)
                 }
             }
         }
@@ -260,7 +301,7 @@ final class HIDInput: ObservableObject {
         repeatTimer?.invalidate()
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { _ in
             self.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { _ in
-                Actions.run(action)
+                self.runAction(action)
             }
         }
     }
@@ -273,6 +314,9 @@ final class HIDInput: ObservableObject {
     // MARK: - 摇杆
 
     private func onHat(_ dir: Int?, device: String, ch: StickChannel) {
+        HIDProof.shared.record("hat", [
+            "deviceID": device, "channel": ch.rawValue, "direction": dir ?? -1,
+        ])
         previewHandler?(.hat(dir, ch))
         // 学习方向时才拦截, 免得学的过程中摇杆还在翻页
         if let cap = captureHandler { cap(.hat(dir, ch)); return }
@@ -282,13 +326,22 @@ final class HIDInput: ObservableObject {
               let key = HIDInput.nearestKey(dir, p.sticks[ch.rawValue] ?? [:]),
               let action = p.stickAction(ch, dir: key, app: AppContext.shared.frontBundle)
         else { return }
-        Actions.run(action)
+        runAction(action)
         repeatButton = -1
         repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { _ in
             self.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { _ in
-                Actions.run(action)
+                self.runAction(action)
             }
         }
+    }
+
+    private func runAction(_ action: String) {
+        proofAction(action) { Actions.run(action) }
+    }
+
+    private func proofAction(_ action: String, run: () -> Void) {
+        HIDProof.shared.record("action", ["action": action])
+        if !HIDProof.shared.dryRun { run() }
     }
 
     /// 帽子开关是 8 方向环形。取最近的已学方向, 斜推也能落到正确的一边。

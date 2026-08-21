@@ -13,10 +13,17 @@ enum ButtonNames {
         1: "□", 2: "✕", 3: "○", 4: "△", 5: "L1", 6: "R1", 7: "L2", 8: "R2",
         9: "Create", 10: "Options", 11: "L3", 12: "R3", 13: "PS", 14: L("触摸板"),
     ]
+    static let xbox: [Int: String] = [
+        1: "A", 2: "B", 3: "X", 4: "Y", 5: "LB", 6: "RB",
+        7: "View", 8: "Menu", 9: L("左摇杆按下"), 10: L("右摇杆按下"),
+        11: "Xbox", 12: "Share",
+        XboxHID.leftTriggerButton: "LT", XboxHID.rightTriggerButton: "RT",
+    ]
 
     static func name(vendor: Int, button: Int) -> String {
         let table: [Int: String] = vendor == 0x057E ? nintendo
-                                 : vendor == 0x054C ? sony : [:]
+                                 : vendor == 0x054C ? sony
+                                 : vendor == XboxHID.vendorID ? xbox : [:]
         return table[button].map { "\($0)  (\(button))" } ?? L("按键 %@", String(button))
     }
 }

@@ -9,6 +9,7 @@ enum DefaultProfiles {
 
     static func make(vendor: Int, product: Int, name: String) -> DeviceProfile? {
         switch (vendor, product) {
+        case (XboxHID.vendorID, _): return xbox(name, product: product)
         case (0x057E, 0x2009): return proController(name)
         case (0x054C, _):      return playstation(name)
         case (0x057E, 0x2007): return joyconRight(name)
@@ -35,6 +36,32 @@ enum DefaultProfiles {
         "down":  .init(hat: 4, action: "down"),
         "left":  .init(hat: 6, action: "left"),
     ]
+
+    // MARK: - Xbox
+
+    private static func xbox(_ name: String, product: Int) -> DeviceProfile {
+        var p = DeviceProfile(vendorID: XboxHID.vendorID, productID: product, name: name)
+        p.buttons = b([
+            1: "confirm",       // A
+            2: "cancel",        // B
+            3: "clearLine",     // X
+            4: "delete",        // Y
+            5: "confirm",       // LB — left-hand send
+            6: "focusGhostty",  // RB
+            7: "focusInput",    // View
+            8: "modelMenu",     // Menu
+            9: "cancel",        // left stick click
+            10: "sideChat",     // right stick click
+            12: "focusWeChat",  // Share
+            XboxHID.leftTriggerButton: "ptt",
+            XboxHID.rightTriggerButton: "switchApp",
+            // 11 = Xbox button: macOS reserves the guide/menu behaviour.
+        ])
+        p.sticks = ["hat": dpad]
+        p.overrides = [BundleID.chrome: AppOverride(
+            buttons: b([3: "reload", 4: "navBack", 7: "closeTab"]))]
+        return p
+    }
 
     // MARK: - Switch Pro
 

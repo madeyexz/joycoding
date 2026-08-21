@@ -274,9 +274,10 @@ final class ConfigStore: ObservableObject {
     private let url: URL
 
     private init() {
-        let dir = FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/joycoding", isDirectory: true)
+        let dir = ProcessInfo.processInfo.environment["JOYCODING_CONFIG_DIR"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".config/joycoding", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         url = dir.appendingPathComponent("config.json")
 

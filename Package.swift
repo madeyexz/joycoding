@@ -9,6 +9,11 @@ let package = Package(
             name: "JoyCoding",
             path: "Sources/JoyCoding",
             swiftSettings: [.swiftLanguageMode(.v5)]
-        )
+        ),
+        .testTarget(
+            name: "JoyCodingTests",
+            dependencies: ["JoyCoding"],
+            path: "Tests/JoyCodingTests"
+        ),
     ]
 )
