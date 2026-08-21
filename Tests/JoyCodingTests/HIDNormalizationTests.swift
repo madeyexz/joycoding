@@ -41,7 +41,7 @@ final class HIDNormalizationTests: XCTestCase {
 
     func testElite2BLEButtonsUseCanonicalXboxNames() {
         let pairs = [1: 1, 2: 2, 4: 3, 5: 4, 7: 5, 8: 6,
-                     11: 8, 12: 12, 13: 11, 14: 9, 15: 10]
+                     11: 7, 12: 8, 13: 11, 14: 9, 15: 10]
         for (raw, canonical) in pairs {
             XCTAssertEqual(XboxHID.canonicalButton(
                 vendor: 0x045E, product: 0x0B22,
@@ -53,9 +53,43 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertNil(XboxHID.canonicalButton(
             vendor: 0x045E, product: 0x0B22,
             usagePage: XboxHID.buttonPage, usage: 6))
-        XCTAssertEqual(XboxHID.canonicalButton(
+        XCTAssertNil(XboxHID.canonicalButton(
             vendor: 0x045E, product: 0x0B22,
-            usagePage: XboxHID.consumerPage, usage: XboxHID.elite2ViewUsage), 7)
+            usagePage: 0x0C, usage: 0xB2))
+    }
+
+    func testXboxAnalogAxesAreSeparateDirectionChannels() {
+        XCTAssertEqual(XboxHID.stickAxis(
+            vendor: 0x045E, usagePage: 0x01, usage: 0x30),
+            XboxHID.StickAxis(channel: .left, component: .x))
+        XCTAssertEqual(XboxHID.stickAxis(
+            vendor: 0x045E, usagePage: 0x01, usage: 0x31),
+            XboxHID.StickAxis(channel: .left, component: .y))
+        XCTAssertEqual(XboxHID.stickAxis(
+            vendor: 0x045E, usagePage: 0x01, usage: 0x32),
+            XboxHID.StickAxis(channel: .right, component: .x))
+        XCTAssertEqual(XboxHID.stickAxis(
+            vendor: 0x045E, usagePage: 0x01, usage: 0x35),
+            XboxHID.StickAxis(channel: .right, component: .y))
+        XCTAssertNil(XboxHID.stickAxis(
+            vendor: 0x054C, usagePage: 0x01, usage: 0x30))
+    }
+
+    func testXboxAnalogStickDirectionUsesDeadZoneAndHysteresis() {
+        XCTAssertEqual(HIDNormalization.axis(
+            raw: 0, logicalMin: 0, logicalMax: 65535), -1, accuracy: 0.0001)
+        XCTAssertEqual(HIDNormalization.axis(
+            raw: 65535, logicalMin: 0, logicalMax: 65535), 1, accuracy: 0.0001)
+        XCTAssertEqual(HIDNormalization.axis(
+            raw: 32768, logicalMin: 0, logicalMax: 65535), 0, accuracy: 0.0001)
+
+        XCTAssertNil(HIDNormalization.stickDirection(x: 0.30, y: 0, previous: nil))
+        XCTAssertEqual(HIDNormalization.stickDirection(x: 0.70, y: 0, previous: nil), 2)
+        XCTAssertEqual(HIDNormalization.stickDirection(x: -0.70, y: 0, previous: nil), 6)
+        XCTAssertEqual(HIDNormalization.stickDirection(x: 0, y: -0.70, previous: nil), 0)
+        XCTAssertEqual(HIDNormalization.stickDirection(x: 0, y: 0.70, previous: nil), 4)
+        XCTAssertEqual(HIDNormalization.stickDirection(x: 0.40, y: 0, previous: 2), 2)
+        XCTAssertNil(HIDNormalization.stickDirection(x: 0.30, y: 0, previous: 2))
     }
 
     func testOtherControllersKeepTheirButtonUsages() {
@@ -96,12 +130,14 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertEqual(profile.buttons["8"], ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
         XCTAssertEqual(profile.buttons["9"]?.long, "raycastCodex")
         XCTAssertEqual(profile.buttons["10"]?.long, "raycastAmp")
-        XCTAssertEqual(profile.buttons["12"], ButtonBinding(tap: "raycastWeChat", long: "raycastHeptabase"))
+        XCTAssertNil(profile.buttons["12"])
         XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.tap, "arcReload")
         XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.long, "raycastEmojiPicker")
         XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["7"]?.long, "raycastClipboardHistory")
         XCTAssertEqual(profile.sticks["hat"]?["up"], StickDir(hat: 0, action: "scrollUp"))
         XCTAssertEqual(profile.sticks["hat"]?["right"], StickDir(hat: 2, action: "sessionNext"))
+        XCTAssertEqual(profile.sticks["left"]?["up"], StickDir(hat: 0, action: "scrollUp"))
+        XCTAssertEqual(profile.sticks["right"]?["up"], StickDir(hat: 0, action: "up"))
     }
 
     func testRightShiftReturnKeepsSidedModifierIdentity() {
@@ -164,7 +200,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 1)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 2)
         XCTAssertEqual(config.devices[0].buttons["5"]?.long, "raycastSlack")
         XCTAssertEqual(config.devices[0].buttons["6"],
                        ButtonBinding(tap: "raycastArc", long: "raycastWarp"))
@@ -172,6 +208,36 @@ final class HIDNormalizationTests: XCTestCase {
                        ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
         XCTAssertEqual(config.devices[0].buttons["12"]?.tap, "customWeChat")
         XCTAssertEqual(config.devices[0].buttons["12"]?.long, "raycastHeptabase")
+        XCTAssertEqual(config.devices[0].sticks["hat"], DefaultProfiles.dpad)
+        XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.dpad)
+        XCTAssertEqual(config.devices[0].sticks["right"], DefaultProfiles.rightStick)
+    }
+
+    func testXboxDirectionMigrationRepairsOnlyEmptyChannels() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 1
+        var profile = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Elite Series 2")
+        let customHat = ["up": StickDir(hat: 1, action: "custom")]
+        profile.sticks = ["hat": customHat, "left": [:]]
+        profile.buttons["12"] = ButtonBinding(
+            tap: "raycastWeChat", long: "raycastHeptabase")
+        config.devices = [profile]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 2)
+        XCTAssertEqual(config.devices[0].sticks["hat"], customHat)
+        XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.dpad)
+        XCTAssertEqual(config.devices[0].sticks["right"], DefaultProfiles.rightStick)
+        XCTAssertNil(config.devices[0].buttons["12"])
+    }
+
+    func testControllerTestModeIsAnExplicitActionGate() {
+        XCTAssertTrue(HIDInput.suppressesActions(inTestMode: true))
+        XCTAssertFalse(HIDInput.suppressesActions(inTestMode: false))
+        XCTAssertTrue(HIDInput.suppressesActions(
+            inTestMode: false, pressBeganInTestMode: true))
     }
 
     func testCurrentMacRaycastBindingsWhenExplicitlyRequested() throws {

@@ -19,18 +19,25 @@ struct ButtonBinding: Codable, Equatable {
 /// 只存 动作→hat 的话, 界面就只能显示"方向 6"这种对人没意义的数字。
 /// 方向通道。一只手柄可能有好几个方向来源, 各绑各的。
 enum StickChannel: String, CaseIterable {
-    /// hat = 主方向通道。Joy-Con 上是摇杆; Pro 手柄上十字键和左摇杆【合流】
-    /// 到这里 —— 推哪个都一样, 省一套配置。右摇杆才单独成一个通道。
-    case hat, right
+    /// hat = HID 帽子开关（十字键或 Joy-Con 摇杆）。Xbox 的两根模拟摇杆
+    /// 是独立 X/Y 轴，不能和十字键合流，否则三个物理来源无法分别高亮和配置。
+    case hat, left, right
 
     var label: String {
         switch self {
         case .hat:   return L("主方向")
+        case .left:  return L("左摇杆")
         case .right: return L("右摇杆")
         }
     }
     /// 虚拟锚点 id, 用负数和真实按键编号错开
-    var anchorID: Int { self == .hat ? -1 : -3 }
+    var anchorID: Int {
+        switch self {
+        case .hat: return -1
+        case .left: return -2
+        case .right: return -3
+        }
+    }
     static func from(anchorID: Int) -> StickChannel? {
         allCases.first { $0.anchorID == anchorID }
     }
@@ -235,38 +242,64 @@ struct Config: Codable {
     var devices: [DeviceProfile] = []
     /// Versioned so an existing Elite profile gets the Raycast layer once without
     /// repeatedly overwriting later user customization.
-    var xboxRaycastPresetVersion = 1
+    var xboxRaycastPresetVersion = 2
 
     mutating func migrateXboxRaycastPresetIfNeeded() {
-        guard xboxRaycastPresetVersion < 1 else { return }
-        defer { xboxRaycastPresetVersion = 1 }
+        guard xboxRaycastPresetVersion < 2 else { return }
+        let oldVersion = xboxRaycastPresetVersion
+        defer { xboxRaycastPresetVersion = 2 }
         for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
-            func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
-                         from old: String?, to new: String) {
-                guard devices[index].buttons[button]?[keyPath: path] == old else { return }
-                devices[index].buttons[button, default: ButtonBinding()][keyPath: path] = new
-            }
-            replace("3", \.long, from: nil, to: "raycastEmojiPicker")
-            replace("5", \.long, from: "focusSlack", to: "raycastSlack")
-            replace("6", \.tap, from: "focusArc", to: "raycastArc")
-            replace("6", \.long, from: "focusGhostty", to: "raycastWarp")
-            replace("7", \.long, from: nil, to: "raycastClipboardHistory")
-            replace("8", \.tap, from: "modelMenu", to: "raycastLauncher")
-            replace("8", \.long, from: nil, to: "raycastAIChat")
-            replace("9", \.long, from: "focusCodex", to: "raycastCodex")
-            replace("10", \.long, from: nil, to: "raycastAmp")
-            replace("12", \.tap, from: "focusWeChat", to: "raycastWeChat")
-            replace("12", \.long, from: "focusHeptabase", to: "raycastHeptabase")
+            if oldVersion < 1 {
+                func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
+                             from old: String?, to new: String) {
+                    guard devices[index].buttons[button]?[keyPath: path] == old else { return }
+                    devices[index].buttons[button, default: ButtonBinding()][keyPath: path] = new
+                }
+                replace("3", \.long, from: nil, to: "raycastEmojiPicker")
+                replace("5", \.long, from: "focusSlack", to: "raycastSlack")
+                replace("6", \.tap, from: "focusArc", to: "raycastArc")
+                replace("6", \.long, from: "focusGhostty", to: "raycastWarp")
+                replace("7", \.long, from: nil, to: "raycastClipboardHistory")
+                replace("8", \.tap, from: "modelMenu", to: "raycastLauncher")
+                replace("8", \.long, from: nil, to: "raycastAIChat")
+                replace("9", \.long, from: "focusCodex", to: "raycastCodex")
+                replace("10", \.long, from: nil, to: "raycastAmp")
+                replace("12", \.tap, from: "focusWeChat", to: "raycastWeChat")
+                replace("12", \.long, from: "focusHeptabase", to: "raycastHeptabase")
 
-            for app in [BundleID.chrome, BundleID.arc] {
-                guard var override = devices[index].overrides[app] else { continue }
-                if override.buttons["3"]?.long == nil {
-                    override.buttons["3", default: ButtonBinding()].long = "raycastEmojiPicker"
+                for app in [BundleID.chrome, BundleID.arc] {
+                    guard var override = devices[index].overrides[app] else { continue }
+                    if override.buttons["3"]?.long == nil {
+                        override.buttons["3", default: ButtonBinding()].long = "raycastEmojiPicker"
+                    }
+                    if override.buttons["7"]?.long == nil {
+                        override.buttons["7", default: ButtonBinding()].long = "raycastClipboardHistory"
+                    }
+                    devices[index].overrides[app] = override
                 }
-                if override.buttons["7"]?.long == nil {
-                    override.buttons["7", default: ButtonBinding()].long = "raycastClipboardHistory"
+            }
+
+            if oldVersion < 2 {
+                // The first Xbox direction learner cleared the saved map before a
+                // completed capture. Restore only missing/empty channels; never
+                // overwrite a user's non-empty custom direction map.
+                if devices[index].sticks[StickChannel.hat.rawValue]?.isEmpty != false {
+                    devices[index].sticks[StickChannel.hat.rawValue] = DefaultProfiles.dpad
                 }
-                devices[index].overrides[app] = override
+                if devices[index].sticks[StickChannel.left.rawValue]?.isEmpty != false {
+                    devices[index].sticks[StickChannel.left.rawValue] = DefaultProfiles.dpad
+                }
+                if devices[index].sticks[StickChannel.right.rawValue]?.isEmpty != false {
+                    devices[index].sticks[StickChannel.right.rawValue] = DefaultProfiles.rightStick
+                }
+
+                // Elite Profile changes the controller's onboard hardware profile
+                // and emits no HID event. Remove only JoyCoding's obsolete default;
+                // preserve any genuinely custom button-12 binding.
+                if devices[index].buttons["12"] == ButtonBinding(
+                    tap: "raycastWeChat", long: "raycastHeptabase") {
+                    devices[index].buttons.removeValue(forKey: "12")
+                }
             }
         }
     }

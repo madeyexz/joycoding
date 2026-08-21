@@ -18,6 +18,7 @@ enum Translations {
         "pttTestHint": "点「测试」—— JoyCoding 会按住这个键 2 秒。听写工具起来了就说明键是对的。",
         "pttInstalledHint": "检测到这台 Mac 上装了 %@。Raycast 会从本机设置自动读取；其它工具请确认手动键位一致。",
         "raycastShortcutHint": "从 Raycast 本机设置读取：%@。JoyCoding 不会修改 Raycast。",
+        "测试模式说明": "打开后手柄仍会实时点亮并显示对应动作，但不会发送键盘、Raycast、听写、滚动或切换 app 事件。离开按键映射页时自动关闭。",
         "pairBtn": "配对",
         "langHint": "跟随系统时，只有简体中文环境显示中文，其余一律英文。",
         "axHowto": "在「系统设置 → 隐私与安全性 → 辅助功能」里勾选 JoyCoding，"
@@ -91,10 +92,11 @@ enum Translations {
         "减号 −": "Minus −", "加号 +": "Plus +",
         "左摇杆按下": "Left stick click", "右摇杆按下": "Right stick click",
         "摇杆按下": "Stick click", "截图键": "Capture", "触摸板": "Touchpad",
-        "主方向": "Main D-pad", "右摇杆": "Right stick",
+        "主方向": "Main D-pad", "左摇杆": "Left stick", "右摇杆": "Right stick",
         "十字键": "D-pad", "摇杆": "Stick", "手柄": "Controller",
         "十字键 / 左摇杆": "D-pad / Left stick", "摇杆方向": "Stick directions",
-        "十字键方向": "D-pad directions", "右摇杆方向": "Right stick directions",
+        "十字键方向": "D-pad directions", "左摇杆方向": "Left stick directions",
+        "右摇杆方向": "Right stick directions",
         "微信": "WeChat", "静音": "Mute", "方向 %@": "Direction %@",
 
         // MARK: 设置 · 标签页与分组
@@ -227,6 +229,7 @@ enum Translations {
 
         // MARK: 带插值
         "把右摇杆推向【%@】": "Push the right stick %@",
+        "把左摇杆推向【%@】": "Push the left stick %@",
         "把摇杆推向【%@】": "Push the stick %@",
         "按十字键或推左摇杆【%@】": "Press the D-pad or push the left stick %@",
         "学习「%@」": "Learn %@",
@@ -252,6 +255,7 @@ enum Translations {
         "  电量 — (": "  battery — (",
         "pttStyleHint": "Choose the first for push-to-talk tools like Raycast, Typeless, or VoiceInk; macOS dictation is a toggle, so pick the second.",
         "macOS 系统保留（打开游戏控制器）": "Reserved by macOS (opens Game Controller settings)",
+        "手柄硬件保留（切换板载配置）": "Reserved by controller (cycles onboard profiles)",
         "pttKeyHint": "Shortcut chords send the complete physical key sequence and preserve left/right modifier identity — important when a dictation tool binds Right Shift specifically.",
         "pttFuseHint": "If the controller disconnects mid-hold, the release event never arrives and the modifier stays stuck, making the machine unusable. This is the backstop.",
         "remoteWarn": "⚠️ This endpoint hands keyboard access to the network. Use it on a trusted LAN or Tailscale only — never port-forward it.",
@@ -267,6 +271,17 @@ enum Translations {
         "pttInstalledHint": "Found %@ on this Mac. Raycast is read automatically from local settings; for other tools, check that the manual shortcut matches.",
         "raycastShortcutHint": "Read from Raycast's local settings: %@. JoyCoding never changes Raycast.",
         "跟随 Raycast 听写快捷键": "Follow Raycast Dictation shortcut",
+        "测试模式": "Test Mode",
+        "只点亮，不执行": "Highlight only; actions paused",
+        "测试模式说明": "Controller input still highlights and shows its resolved binding, but keyboard, Raycast, dictation, scrolling, and app-switch events are suppressed. Test Mode turns off when you leave Mapping.",
+        "测试模式：动作已暂停": "Test Mode: actions paused",
+        "测试模式已关闭": "Test Mode off",
+        "单击：%@": "Tap: %@",
+        "双击：%@": "Double: %@",
+        "长按：%@": "Hold: %@",
+        "测试 按键 %@：%@": "Test button %@: %@",
+        "测试 %@：%@": "Test %@: %@",
+        "测试 %@ %@：%@": "Test %@ %@: %@",
         "偏好": "Preferences",
         "菜单栏显示手柄电量": "Show battery in menu bar",
         "langHint": "In System mode, Chinese is used only for Simplified Chinese; "

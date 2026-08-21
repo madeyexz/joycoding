@@ -15,6 +15,7 @@ struct MappingView: View {
     /// 当前编辑的层。"" = 基础层, 否则是 app 的 bundleID。
     @State private var layer = ""
     @State private var stickStep = 0
+    @State private var stickDraft: [String: StickDir] = [:]
 
     /// (方向键, 默认动作)。提示文案按设备现生成 —— Joy-Con 上是摇杆要"推",
     /// Pro 手柄上这个通道其实是十字键, 得说"按"。
@@ -46,6 +47,7 @@ struct MappingView: View {
     private func stickPrompt(_ ch: StickChannel, _ i: Int) -> String {
         let dir = [L("上"), L("下"), L("左"), L("右")][min(i, 3)]
         if ch == .right { return L("把右摇杆推向【%@】", dir) }
+        if ch == .left { return L("把左摇杆推向【%@】", dir) }
         return hatLabel == L("十字键")
             ? L("按十字键或推左摇杆【%@】", dir) : L("把摇杆推向【%@】", dir)
     }
@@ -77,7 +79,7 @@ struct MappingView: View {
         }
         .frame(minWidth: 980, minHeight: 640)
         .onAppear { selectedID = hid.devices.first?.id; watchPresses() }
-        .onDisappear { stopWatching() }
+        .onDisappear { hid.setTestMode(false); stopWatching() }
         .onChange(of: hid.devices.map(\.id)) { _ in
             if selectedID == nil { selectedID = hid.devices.first?.id }
         }
@@ -111,6 +113,19 @@ struct MappingView: View {
                 }
             }
             Spacer()
+            Toggle(isOn: Binding(
+                get: { hid.testMode },
+                set: { hid.setTestMode($0) })) {
+                Label(L("测试模式"), systemImage: "hand.raised.fill")
+                    .font(.subheadline.weight(.medium))
+            }
+            .toggleStyle(.button)
+            .tint(hid.testMode ? .orange : .accentColor)
+            .help(L("测试模式说明"))
+            if hid.testMode {
+                Text(L("只点亮，不执行"))
+                    .font(.caption).foregroundStyle(.orange)
+            }
             if let d = device {
                 if learningStick {
                     Text(stickStep < stickWizard.count
@@ -210,8 +225,6 @@ struct MappingView: View {
         GeometryReader { geo in
             let W = geo.size.width, H = geo.size.height
             let cardW: CGFloat = 262
-            // Pro 手柄有 15 张卡, 一屏放不下 —— 算出需要多高, 不够就整块滚动。
-            // 连线和卡片在同一坐标系里, 一起滚不会错位。
             let lefts0  = art.anchors.filter { $0.side == .left  }
             let rights0 = art.anchors.filter { $0.side == .right }
             let need = max(stackHeight(lefts0), stackHeight(rights0)) + 24
@@ -259,7 +272,6 @@ struct MappingView: View {
         }
     }
 
-    /// 一列卡片堆起来需要多高 (含最小间距)
     private func stackHeight(_ list: [ButtonAnchor]) -> CGFloat {
         guard !list.isEmpty else { return 0 }
         return list.map(height).reduce(0, +) + CGFloat(list.count - 1) * 6
@@ -267,21 +279,16 @@ struct MappingView: View {
 
     private let stickCardH: CGFloat = 158
 
-    /// 卡片高度按【实际设了几层】算。三行固定占位的话, 双击长按大多是空的,
-    /// 2/3 的高度都在显示"未设置" —— 既浪费空间又让字没法放大。
     private func height(_ a: ButtonAnchor) -> CGFloat {
-        // 认所有方向通道, 不是只认主方向 —— 右摇杆的 id 是 -3
         if StickChannel.from(anchorID: a.id) != nil { return stickCardH }
         let b = profile?.binding(button: a.id, app: layer) ?? ButtonBinding()
-        var h: CGFloat = 66                                   // 标题 + 单击 + 内边距
+        var h: CGFloat = 66
         if b.double != nil { h += 26 }
         if b.long   != nil { h += 26 }
-        if b.double == nil || b.long == nil { h += 22 }       // L("＋双击") + " " + L("＋长按") 那一行
+        if b.double == nil || b.long == nil { h += 22 }
         return h
     }
 
-    /// position() 定的是卡片【中心】, 所以上下必须各留半张卡, 否则首尾会被切在窗外。
-    /// 而且摇杆卡比按键卡高, 不能简单均分 —— 按实际高度依次堆叠再整体居中。
     private func layout(_ list: [ButtonAnchor], H: CGFloat) -> [CGFloat] {
         guard !list.isEmpty else { return [] }
         let heights = list.map(height)
@@ -306,7 +313,6 @@ struct MappingView: View {
         side == .left ? cardW / 2 + 20 : W - cardW / 2 - 20
     }
 
-    /// 贝塞尔连线: 先横向出卡片, 再拐向按键, 比直线好看且不遮挡
     private func connect(_ p: inout Path, from: CGPoint, to: CGPoint) {
         let dx = (to.x - from.x) * 0.55
         p.move(to: from)
@@ -378,8 +384,9 @@ struct MappingView: View {
 
     @ViewBuilder
     private func buttonCard(_ d: ConnectedDevice, _ a: ButtonAnchor, width: CGFloat) -> some View {
-        if d.vendorID == XboxHID.vendorID && d.productID == XboxHID.elite2ProductID && a.id == 11 {
-            reservedXboxCard(a, width: width)
+        if d.vendorID == XboxHID.vendorID && d.productID == XboxHID.elite2ProductID
+            && (a.id == 11 || a.id == 12) {
+            reservedXboxCard(a, width: width, hardwareProfile: a.id == 12)
         } else {
             editableButtonCard(d, a, width: width)
         }
@@ -442,11 +449,14 @@ struct MappingView: View {
         .onHover { hot = $0 ? a.id : (hot == a.id ? nil : hot) }
     }
 
-    private func reservedXboxCard(_ a: ButtonAnchor, width: CGFloat) -> some View {
+    private func reservedXboxCard(_ a: ButtonAnchor, width: CGFloat,
+                                  hardwareProfile: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(a.label)
                 .font(.system(.title3, design: .rounded).weight(.bold))
-            Text(L("macOS 系统保留（打开游戏控制器）"))
+            Text(hardwareProfile
+                 ? L("手柄硬件保留（切换板载配置）")
+                 : L("macOS 系统保留（打开游戏控制器）"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -540,7 +550,7 @@ struct MappingView: View {
 
     // MARK: - 实时输入
 
-    /// 只旁观, 不拦截 —— 按 A 该发的回车照发, 界面只是跟着亮一下
+    /// 普通状态只旁观；测试模式是否拦截由 HIDInput 的统一安全门决定。
     private func watchPresses() {
         HIDInput.shared.previewHandler = { input in
             DispatchQueue.main.async {
@@ -568,25 +578,29 @@ struct MappingView: View {
     private func beginStick(_ d: ConnectedDevice, _ ch: StickChannel) {
         stickStep = 0
         learningCh = ch
-        mutate(d) { $0.sticks[ch.rawValue] = [:] }
+        stickDraft = [:]
         learningStick = true
         HIDInput.shared.captureHandler = { input in
             DispatchQueue.main.async {
                 guard case .hat(let dir, let ch) = input, let dir, ch == learningCh,
                       stickStep < stickWizard.count else { return }
                 let w = stickWizard[stickStep]
-                let cur = profile?.sticks[ch.rawValue] ?? [:]
                 // 同一个方向值不能学两次, 否则两个方向会打架
-                guard !cur.values.contains(where: { $0.hat == dir }) else { return }
-                mutate(d) { $0.sticks[ch.rawValue, default: [:]][w.0] = StickDir(hat: dir, action: w.1) }
+                guard !stickDraft.values.contains(where: { $0.hat == dir }) else { return }
+                stickDraft[w.0] = StickDir(hat: dir, action: w.1)
                 stickStep += 1
-                if stickStep >= stickWizard.count { endStick() }
+                if stickStep >= stickWizard.count {
+                    let learned = stickDraft
+                    mutate(d) { $0.sticks[ch.rawValue] = learned }
+                    endStick()
+                }
             }
         }
     }
 
     private func endStick() {
         learningStick = false
+        stickDraft = [:]
         HIDInput.shared.captureHandler = nil
     }
 

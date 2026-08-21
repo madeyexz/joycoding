@@ -193,7 +193,11 @@ final class HTTPServer: ObservableObject {
         }.joined(separator: ",")
         return """
         {"app":"\(esc(front))","appName":"\(esc(AppName.of(front)))",\
-        "inTarget":\(AppContext.shared.inTarget()),"apps":[\(apps)],\
+        "inTarget":\(AppContext.shared.inTarget()),\
+        "testMode":\(HIDInput.shared.testMode),\
+        "lastInput":"\(esc(HIDInput.shared.lastInput))",\
+        "lastDispatch":"\(esc(HIDInput.shared.lastDispatch))",\
+        "apps":[\(apps)],\
         "row":[\(row)],"extras":[\(extras)]}
         """
     }
@@ -281,7 +285,8 @@ final class HTTPServer: ObservableObject {
         for d in devs {
             let p = cfg.devices.first { $0.vendorID == d.vendorID && $0.productID == d.productID }
             out += "device:        \(d.name)  \(d.id)  "
-            out += p.map { L("已配 %@ 键 / %@ 方向", String($0.buttons.count), String($0.stickDirs.count)) }
+            out += p.map { L("已配 %@ 键 / %@ 方向", String($0.buttons.count),
+                             String($0.sticks.values.reduce(0) { $0 + $1.count })) }
                     ?? L("⚠️ 没有匹配的配置")
             if let pct = JoyConBattery.shared.levels[d.id] {
                 out += L("  电量 %@%%", String(pct)) + (JoyConBattery.shared.charging[d.id] == true ? " ⚡" : "")
@@ -294,6 +299,7 @@ final class HTTPServer: ObservableObject {
         out += "\n"
         out += "last input:    " + HIDInput.shared.lastInput + "\n"
         out += "last dispatch: " + HIDInput.shared.lastDispatch + "\n"
+        out += "test mode:     " + (HIDInput.shared.testMode ? "on" : "off") + "\n"
 
         for g in Actions.groups {
             out += "\n[\(g)]\n"

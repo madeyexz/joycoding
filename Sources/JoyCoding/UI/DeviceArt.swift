@@ -32,8 +32,7 @@ struct DeviceArt {
     let aspect: CGFloat          // 宽/高
     let railSide: Side?          // SL/SR 那条滑轨在哪边, nil = 没有
     var style: BodyStyle = .joycon
-    /// 帽子开关在这只手柄上叫什么。Joy-Con 上是摇杆, Pro 手柄上是十字键 ——
-    /// 模拟摇杆走 X/Y/Rx/Ry 轴, 我们不读那个。
+    /// 帽子开关在这只手柄上叫什么。Joy-Con 上是摇杆, Pro/Xbox 上是十字键。
     var hatLabel: String = L("摇杆")
 
 
@@ -183,6 +182,9 @@ struct DeviceArt {
             .init(id: 9, label: L("左摇杆按下"), pos: .init(x: 0.245, y: 0.300),
                   size: .init(width: 0.155, height: 0.225), shape: .circle, side: .left,
                   kind: .stick),
+            .init(id: StickChannel.left.anchorID, label: L("左摇杆方向"),
+                  pos: .init(x: 0.245, y: 0.300),
+                  size: .init(width: 0.155, height: 0.225), shape: .circle, side: .left),
             .init(id: StickChannel.hat.anchorID, label: L("十字键"),
                   pos: .init(x: 0.335, y: 0.560),
                   size: .init(width: 0.13, height: 0.19), shape: .circle, side: .left),
@@ -200,6 +202,9 @@ struct DeviceArt {
             .init(id: 10, label: L("右摇杆按下"), pos: .init(x: 0.648, y: 0.560),
                   size: .init(width: 0.155, height: 0.225), shape: .circle, side: .right,
                   kind: .stick),
+            .init(id: StickChannel.right.anchorID, label: L("右摇杆方向"),
+                  pos: .init(x: 0.648, y: 0.560),
+                  size: .init(width: 0.155, height: 0.225), shape: .circle, side: .right),
 
             .init(id: 7, label: "View", pos: .init(x: 0.398, y: 0.250),
                   size: .init(width: 0.050, height: 0.072), shape: .circle, side: .left),
@@ -307,18 +312,24 @@ struct DeviceBody: View {
                 shoulders(w: w, h: h)
                 shell(w: w, h: h)
                 rail(w: w, h: h)
+                controllerDetails(w: w, h: h)
+                if let dpad = art.anchors.first(where: {
+                    StickChannel.from(anchorID: $0.id) == .hat
+                }), art.style != .joycon {
+                    dpadView(dpad, w: w, h: h)
+                }
                 ForEach(art.anchors.filter {
                     $0.id != 15 && $0.id != 16 && StickChannel.from(anchorID: $0.id) == nil
                 }) { a in
                     anchorView(a, w: w, h: h)
                 }
-                // 四向箭头画在摇杆外围, 推哪边哪边亮
-                // 箭头围着"帽子开关"画。Joy-Con 上它是摇杆, Pro 手柄上是十字键,
-                // 位置各不相同, 所以按虚拟锚点走而不是硬找摇杆 id。
-                ForEach(art.anchors.filter { StickChannel.from(anchorID: $0.id) != nil }) { a in
-                    stickArrows(a, w: w, h: h,
-                                on: liveDir?.0 == StickChannel.from(anchorID: a.id)
-                                    ? liveDir?.1 : nil)
+                // 静止时不画永久的大箭头。只有方向输入发生时才在对应摇杆附近
+                // 显示一个紧凑指示；D-pad 自己的按键帽负责显示 hat 通道。
+                ForEach(art.anchors.filter {
+                    guard let ch = StickChannel.from(anchorID: $0.id) else { return false }
+                    return ch != .hat && liveDir?.0 == ch
+                }) { a in
+                    stickArrows(a, w: w, h: h, on: liveDir?.1)
                 }
             }
         }
@@ -349,6 +360,36 @@ struct DeviceBody: View {
         return p
     }
 
+    /// Xbox 的握把比 Pro 更圆、更向外张，顶部中央也有明显的浅凹。
+    /// 单独画一条轮廓，避免所有横向手柄都共用同一个笨重的外形。
+    private func xboxPath(_ w: CGFloat, _ h: CGFloat) -> Path {
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * w, y: y * h) }
+        var p = Path()
+        p.move(to: pt(0.285, 0.075))
+        p.addCurve(to: pt(0.500, 0.115),
+                   control1: pt(0.355, 0.025), control2: pt(0.430, 0.055))
+        p.addCurve(to: pt(0.715, 0.075),
+                   control1: pt(0.570, 0.055), control2: pt(0.645, 0.025))
+        p.addCurve(to: pt(0.958, 0.300),
+                   control1: pt(0.855, 0.075), control2: pt(0.945, 0.165))
+        p.addCurve(to: pt(0.875, 0.885),
+                   control1: pt(0.985, 0.510), control2: pt(0.945, 0.755))
+        p.addCurve(to: pt(0.665, 0.820),
+                   control1: pt(0.825, 0.990), control2: pt(0.715, 0.955))
+        p.addCurve(to: pt(0.500, 0.715),
+                   control1: pt(0.620, 0.735), control2: pt(0.565, 0.705))
+        p.addCurve(to: pt(0.335, 0.820),
+                   control1: pt(0.435, 0.705), control2: pt(0.380, 0.735))
+        p.addCurve(to: pt(0.125, 0.885),
+                   control1: pt(0.285, 0.955), control2: pt(0.175, 0.990))
+        p.addCurve(to: pt(0.042, 0.300),
+                   control1: pt(0.055, 0.755), control2: pt(0.015, 0.510))
+        p.addCurve(to: pt(0.285, 0.075),
+                   control1: pt(0.055, 0.165), control2: pt(0.145, 0.075))
+        p.closeSubpath()
+        return p
+    }
+
     /// PS 手柄轮廓: 顶部平直、两侧握把更长更外撇, 整体比 Pro 更宽扁
     private func psPath(_ w: CGFloat, _ h: CGFloat) -> Path {
         func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * w, y: y * h) }
@@ -374,7 +415,8 @@ struct DeviceBody: View {
 
     private func bodyPath(_ w: CGFloat, _ h: CGFloat) -> Path {
         if art.style == .playstation { return psPath(w, h) }
-        if art.style == .proController || art.style == .xbox || art.style == .xboxElite2 {
+        if art.style == .xbox || art.style == .xboxElite2 { return xboxPath(w, h) }
+        if art.style == .proController {
             return proPath(w, h)
         }
         let rS = w * 0.12, rB = w * 0.46
@@ -411,17 +453,52 @@ struct DeviceBody: View {
         ZStack {
             bodyPath(w, h)
                 .fill(LinearGradient(
-                    colors: [bodyColor.opacity(0.95), bodyColor.opacity(0.72)],
+                    stops: [
+                        .init(color: Color(red: 0.24, green: 0.25, blue: 0.27), location: 0),
+                        .init(color: bodyColor, location: 0.38),
+                        .init(color: Color(red: 0.105, green: 0.11, blue: 0.12), location: 1),
+                    ],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            bodyPath(w, h).stroke(Color.white.opacity(0.10), lineWidth: 1)
-            // 外侧高光, 撑出圆柱感
+                .shadow(color: .black.opacity(0.32), radius: w * 0.025, y: h * 0.025)
+            bodyPath(w, h).stroke(Color.black.opacity(0.55), lineWidth: 2)
             bodyPath(w, h)
-                .stroke(LinearGradient(colors: [.white.opacity(0.18), .clear],
+                .stroke(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.02)],
                                        startPoint: .top, endPoint: .bottom),
-                        lineWidth: 2)
-                .blur(radius: 2)
+                        lineWidth: 1.2)
         }
         .frame(width: w, height: h)
+    }
+
+    @ViewBuilder
+    private func controllerDetails(w: CGFloat, h: CGFloat) -> some View {
+        if art.style == .xbox || art.style == .xboxElite2 {
+            ZStack {
+                // 中央面板的层次只靠材质差，不再用粗线把机身切碎。
+                RoundedRectangle(cornerRadius: w * 0.035, style: .continuous)
+                    .fill(Color.black.opacity(0.10))
+                    .frame(width: w * 0.31, height: h * 0.34)
+                    .position(x: w * 0.50, y: h * 0.29)
+                RoundedRectangle(cornerRadius: w * 0.035, style: .continuous)
+                    .stroke(Color.white.opacity(0.045), lineWidth: 1)
+                    .frame(width: w * 0.31, height: h * 0.34)
+                    .position(x: w * 0.50, y: h * 0.29)
+
+                // Elite 握把的细点防滑纹理。
+                ForEach(0..<5, id: \.self) { row in
+                    ForEach(0..<4, id: \.self) { col in
+                        Circle().fill(Color.white.opacity(0.055))
+                            .frame(width: max(1.2, w * 0.004), height: max(1.2, w * 0.004))
+                            .position(x: w * (0.115 + CGFloat(col) * 0.026 + CGFloat(row) * 0.008),
+                                      y: h * (0.650 + CGFloat(row) * 0.048))
+                        Circle().fill(Color.white.opacity(0.055))
+                            .frame(width: max(1.2, w * 0.004), height: max(1.2, w * 0.004))
+                            .position(x: w * (0.885 - CGFloat(col) * 0.026 - CGFloat(row) * 0.008),
+                                      y: h * (0.650 + CGFloat(row) * 0.048))
+                    }
+                }
+            }
+            .frame(width: w, height: h)
+        }
     }
 
     // 顶部肩键: ZR 在后, R 在前
@@ -446,15 +523,17 @@ struct DeviceBody: View {
     // 滑轨: 贴合 Switch 主机那条平边, SL/SR 就长在上面
     private func rail(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
-            let rx = art.railSide == .right ? w * 0.957 : w * 0.043
-            RoundedRectangle(cornerRadius: w * 0.03)
-                .fill(Color.black.opacity(0.35))
-                .frame(width: w * 0.085, height: h * 0.70)
-                .position(x: rx, y: h * 0.47)
-            RoundedRectangle(cornerRadius: w * 0.03)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                .frame(width: w * 0.085, height: h * 0.70)
-                .position(x: rx, y: h * 0.47)
+            if let side = art.railSide {
+                let rx = side == .right ? w * 0.957 : w * 0.043
+                RoundedRectangle(cornerRadius: w * 0.03)
+                    .fill(Color.black.opacity(0.35))
+                    .frame(width: w * 0.085, height: h * 0.70)
+                    .position(x: rx, y: h * 0.47)
+                RoundedRectangle(cornerRadius: w * 0.03)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    .frame(width: w * 0.085, height: h * 0.70)
+                    .position(x: rx, y: h * 0.47)
+            }
         }
         .frame(width: w, height: h)
     }
@@ -463,7 +542,7 @@ struct DeviceBody: View {
     private func stickArrows(_ stick: ButtonAnchor, w: CGFloat, h: CGFloat,
                              on liveKey: String?) -> some View {
         let cx = stick.pos.x * w, cy = stick.pos.y * h
-        let r = stick.size.width * w * 0.5 + w * 0.10
+        let r = stick.size.width * w * 0.52 + w * 0.035
         let offsets: [(String, CGFloat, CGFloat)] = [
             ("up", 0, -r), ("down", 0, r), ("left", -r, 0), ("right", r, 0),
         ]
@@ -471,9 +550,9 @@ struct DeviceBody: View {
             ForEach(offsets, id: \.0) { key, dx, dy in
                 let on = liveKey == key
                 Image(systemName: StickAnchor.arrow[key]!)
-                    .font(.system(size: max(6, w * 0.11), weight: .bold))
-                    .foregroundStyle(on ? Color.accentColor : Color.white.opacity(0.22))
-                    .shadow(color: on ? Color.accentColor.opacity(0.8) : .clear, radius: 4)
+                    .font(.system(size: max(8, w * 0.036), weight: .bold))
+                    .foregroundStyle(on ? Color.accentColor : Color.clear)
+                    .shadow(color: on ? Color.accentColor.opacity(0.55) : .clear, radius: 3)
                     .position(x: cx + dx, y: cy + dy)
             }
         }
@@ -482,7 +561,66 @@ struct DeviceBody: View {
 
     private func fillColor(_ id: Int) -> Color {
         if highlighted == id { return .accentColor }
-        return bound.contains(id) ? Color.white.opacity(0.42) : Color.white.opacity(0.13)
+        return bound.contains(id) ? Color.white.opacity(0.25) : Color.white.opacity(0.12)
+    }
+
+    private func faceLegend(_ label: String) -> Color {
+        guard art.style == .xbox || art.style == .xboxElite2 else {
+            return Color.white.opacity(0.70)
+        }
+        switch label {
+        case "A": return Color(red: 0.35, green: 0.82, blue: 0.38)
+        case "B": return Color(red: 0.96, green: 0.35, blue: 0.32)
+        case "X": return Color(red: 0.32, green: 0.66, blue: 0.96)
+        case "Y": return Color(red: 0.97, green: 0.78, blue: 0.25)
+        default: return Color.white.opacity(0.65)
+        }
+    }
+
+    private func stickOffset(_ a: ButtonAnchor, amount: CGFloat) -> CGSize {
+        let ch: StickChannel? = {
+            guard art.style == .xbox || art.style == .xboxElite2 else { return nil }
+            if a.id == 9 { return .left }
+            if a.id == 10 { return .right }
+            return nil
+        }()
+        guard let ch, liveDir?.0 == ch else { return .zero }
+        switch liveDir?.1 {
+        case "up": return .init(width: 0, height: -amount)
+        case "down": return .init(width: 0, height: amount)
+        case "left": return .init(width: -amount, height: 0)
+        case "right": return .init(width: amount, height: 0)
+        default: return .zero
+        }
+    }
+
+    private func dpadView(_ a: ButtonAnchor, w: CGFloat, h: CGFloat) -> some View {
+        let side = max(24, a.size.width * w * 1.42)
+        let active = liveDir?.0 == .hat ? liveDir?.1 : nil
+        return ZStack {
+            DPadCross()
+                .fill(LinearGradient(
+                    colors: [Color.white.opacity(0.22), Color.black.opacity(0.46)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(DPadCross().stroke(Color.white.opacity(0.14), lineWidth: 1))
+            Circle().fill(Color.black.opacity(0.18))
+                .frame(width: side * 0.34, height: side * 0.34)
+            ForEach([
+                ("up", "chevron.up", CGPoint(x: 0.50, y: 0.16)),
+                ("right", "chevron.right", CGPoint(x: 0.84, y: 0.50)),
+                ("down", "chevron.down", CGPoint(x: 0.50, y: 0.84)),
+                ("left", "chevron.left", CGPoint(x: 0.16, y: 0.50)),
+            ], id: \.0) { key, icon, pos in
+                Image(systemName: icon)
+                    .font(.system(size: side * 0.10, weight: .bold))
+                    .foregroundStyle(active == key ? Color.accentColor : Color.white.opacity(0.38))
+                    .position(x: pos.x * side, y: pos.y * side)
+            }
+        }
+        .frame(width: side, height: side)
+        .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+        .position(x: a.pos.x * w, y: a.pos.y * h)
+        .frame(width: w, height: h)
     }
 
     @ViewBuilder
@@ -509,8 +647,10 @@ struct DeviceBody: View {
                         colors: [fillColor(a.id).opacity(0.9), fillColor(a.id).opacity(0.45)],
                         center: .init(x: 0.35, y: 0.3), startRadius: 1, endRadius: bw * 0.6))
                     .frame(width: bw * 0.74, height: bw * 0.74)
+                    .offset(stickOffset(a, amount: bw * 0.075))
                 Circle().stroke(Color.white.opacity(0.12), lineWidth: 1)
                     .frame(width: bw * 0.74, height: bw * 0.74)
+                    .offset(stickOffset(a, amount: bw * 0.075))
 
             case .home, .share, .profile:    // 中央系统键: 外圈 + 图标
                 Circle().stroke(Color.white.opacity(hot ? 0.9 : 0.20), lineWidth: 1.5)
@@ -537,10 +677,18 @@ struct DeviceBody: View {
 
             case .button:    // 面键 + 加减号
                 Circle().fill(fillColor(a.id)).frame(width: bw, height: bw)
-                if a.label != "+" && a.label != "−" {
+                if a.label == "View" {
+                    Image(systemName: "rectangle.on.rectangle")
+                        .font(.system(size: max(5, bw * 0.38), weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.60))
+                } else if a.label == "Menu" {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: max(5, bw * 0.46), weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.60))
+                } else if a.label != "+" && a.label != "−" {
                     Text(a.label)
                         .font(.system(size: max(7, bw * 0.55), weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.black.opacity(0.55))
+                        .foregroundStyle(faceLegend(a.label))
                 } else {
                     Image(systemName: a.label == "−" ? "minus" : "plus")
                         .font(.system(size: max(5, bw * 0.6), weight: .bold))
@@ -559,5 +707,28 @@ struct DeviceBody: View {
         }
         .position(x: cx, y: cy)
         .frame(width: w, height: h)
+    }
+}
+
+private struct DPadCross: Shape {
+    func path(in rect: CGRect) -> Path {
+        let points: [CGPoint] = [
+            .init(x: 0.35, y: 0.00), .init(x: 0.65, y: 0.00),
+            .init(x: 0.65, y: 0.35), .init(x: 1.00, y: 0.35),
+            .init(x: 1.00, y: 0.65), .init(x: 0.65, y: 0.65),
+            .init(x: 0.65, y: 1.00), .init(x: 0.35, y: 1.00),
+            .init(x: 0.35, y: 0.65), .init(x: 0.00, y: 0.65),
+            .init(x: 0.00, y: 0.35), .init(x: 0.35, y: 0.35),
+        ]
+        var p = Path()
+        guard let first = points.first else { return p }
+        p.move(to: .init(x: rect.minX + first.x * rect.width,
+                         y: rect.minY + first.y * rect.height))
+        for point in points.dropFirst() {
+            p.addLine(to: .init(x: rect.minX + point.x * rect.width,
+                                y: rect.minY + point.y * rect.height))
+        }
+        p.closeSubpath()
+        return p
     }
 }

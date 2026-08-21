@@ -31,11 +31,19 @@ final class HIDInput: ObservableObject {
     /// 排查用: 按键走到哪一步了
     @Published private(set) var lastDispatch = "—"
     @Published private(set) var inputCount = 0
+    /// Mapping 页的安全试按模式。输入仍会高亮和解析绑定，但绝不派发动作。
+    @Published private(set) var testMode = false
 
     private var manager: IOHIDManager?
     private var lastButton: [String: Int] = [:]
     private var lastHat: [String: Int?] = [:]   // 通道 -> 上次方向
     private var triggerState: [String: Bool] = [:]
+    private struct StickAxisState {
+        var x = 0.0
+        var y = 0.0
+        var direction: Int?
+    }
+    private var stickAxes: [String: StickAxisState] = [:]
     /// 走原始报告解析的设备。这些设备的标准 HID 元素不再上报,
     /// 也不能让元素路径和原始路径同时派发, 否则会触发两次。
     private var rawDevices: Set<String> = []
@@ -48,11 +56,45 @@ final class HIDInput: ObservableObject {
     private var pendingTap: [Int: Timer] = [:]
     private var repeatTimer: Timer?
     private var repeatButton: Int?
+    private var pttActive = false
+    private var activeButtons: Set<String> = []
+    /// A press that began while Test Mode was on stays suppressed through release,
+    /// even if the toggle is turned off while the physical button is still held.
+    private var testSuppressedButtons: Set<String> = []
 
     private let doubleWindow: TimeInterval = 0.28
     private let longDelay: TimeInterval = 0.45
 
     private init() {}
+
+    func setTestMode(_ enabled: Bool) {
+        guard testMode != enabled else { return }
+        cancelPendingGestures()
+        if enabled { testSuppressedButtons.formUnion(activeButtons) }
+        // 如果是在按住 PTT 时打开测试模式，先补发松开，不能留下卡住的修饰键。
+        if enabled, pttActive {
+            Actions.pttStop()
+            pttActive = false
+        }
+        testMode = enabled
+        lastDispatch = enabled ? L("测试模式：动作已暂停") : L("测试模式已关闭")
+        HIDProof.shared.record("testMode", ["enabled": enabled])
+    }
+
+    static func suppressesActions(inTestMode: Bool,
+                                  pressBeganInTestMode: Bool = false) -> Bool {
+        inTestMode || pressBeganInTestMode
+    }
+
+    private func cancelPendingGestures() {
+        for timer in longTimers.values { timer.invalidate() }
+        for timer in pendingTap.values { timer.invalidate() }
+        longTimers.removeAll()
+        pendingTap.removeAll()
+        pressTime.removeAll()
+        longFired.removeAll()
+        repeatTimer?.invalidate(); repeatTimer = nil; repeatButton = nil
+    }
 
     // MARK: - 启动
 
@@ -170,6 +212,33 @@ final class HIDInput: ObservableObject {
             return      // 这只手柄走原始报告, 元素事件丢弃
         }
 
+        // Xbox 的两根模拟摇杆是四条 Generic Desktop 轴。归一化并加迟滞后,
+        // 复用帽子开关的方向/连发/测试模式路径。
+        if let vendor,
+           let axis = XboxHID.stickAxis(
+                vendor: vendor, usagePage: Int(page), usage: usage) {
+            let key = "\(devID)/\(axis.channel.rawValue)"
+            var state = stickAxes[key] ?? StickAxisState()
+            let value = HIDNormalization.axis(
+                raw: v,
+                logicalMin: IOHIDElementGetLogicalMin(elem),
+                logicalMax: IOHIDElementGetLogicalMax(elem))
+            switch axis.component {
+            case .x: state.x = value
+            case .y: state.y = value
+            }
+            let previous = state.direction
+            let direction = HIDNormalization.stickDirection(
+                x: state.x, y: state.y, previous: previous)
+            state.direction = direction
+            stickAxes[key] = state
+            guard direction != previous else { return }
+            DispatchQueue.main.async {
+                self.onHat(direction, device: devID, ch: axis.channel)
+            }
+            return
+        }
+
         // 摇杆走帽子开关, 逻辑范围 0...7, 越界即回中
         if page == UInt32(kHIDPage_GenericDesktop) && usage == 0x39 {
             let dir = HIDNormalization.hat(
@@ -241,6 +310,8 @@ final class HIDInput: ObservableObject {
     private func onButton(_ n: Int, down: Bool, device: String) {
         HIDProof.shared.record("button", ["deviceID": device, "button": n, "down": down])
         previewHandler?(.button(n, down: down))
+        let physicalKey = "\(device)/\(n)"
+        if down { activeButtons.insert(physicalKey) } else { activeButtons.remove(physicalKey) }
         // 覆盖优先, 回落基础层
         let app = AppContext.shared.frontBundle
         guard let prof = profile(device) else {
@@ -260,8 +331,29 @@ final class HIDInput: ObservableObject {
             ])
         }
 
+        if testMode && down { testSuppressedButtons.insert(physicalKey) }
+        if HIDInput.suppressesActions(
+            inTestMode: testMode,
+            pressBeganInTestMode: testSuppressedButtons.contains(physicalKey)) {
+            if down {
+                let gestures = [
+                    b.tap.map { L("单击：%@", Actions.byID[$0]?.name ?? $0) },
+                    b.double.map { L("双击：%@", Actions.byID[$0]?.name ?? $0) },
+                    b.long.map { L("长按：%@", Actions.byID[$0]?.name ?? $0) },
+                ].compactMap { $0 }.joined(separator: " · ")
+                lastDispatch = L("测试 按键 %@：%@", String(n), gestures)
+                HIDProof.shared.record("suppressed", [
+                    "reason": "testMode", "deviceID": device, "button": n,
+                    "actions": gestures,
+                ])
+            }
+            if !down { testSuppressedButtons.remove(physicalKey) }
+            return
+        }
+
         // 语音是按下/松开语义, 不参与单击双击长按
         if b.tap == "ptt" {
+            pttActive = down
             proofAction(down ? "pttStart" : "pttStop") {
                 down ? Actions.pttStart() : Actions.pttStop()
             }
@@ -329,6 +421,22 @@ final class HIDInput: ObservableObject {
         // 学习方向时才拦截, 免得学的过程中摇杆还在翻页
         if let cap = captureHandler { cap(.hat(dir, ch)); return }
         repeatTimer?.invalidate(); repeatTimer = nil; repeatButton = nil
+
+        if HIDInput.suppressesActions(inTestMode: testMode) {
+            guard let dir, let p = profile(device),
+                  let key = HIDInput.nearestKey(dir, p.sticks[ch.rawValue] ?? [:]),
+                  let action = p.stickAction(ch, dir: key,
+                                             app: AppContext.shared.frontBundle)
+            else { return }
+            let name = Actions.byID[action]?.name ?? action
+            lastDispatch = L("测试 %@ %@：%@", ch.label,
+                             DeviceProfile.dirLabel[key] ?? key, name)
+            HIDProof.shared.record("suppressed", [
+                "reason": "testMode", "deviceID": device,
+                "channel": ch.rawValue, "direction": dir, "action": action,
+            ])
+            return
+        }
 
         guard let dir, let p = profile(device),
               let key = HIDInput.nearestKey(dir, p.sticks[ch.rawValue] ?? [:]),

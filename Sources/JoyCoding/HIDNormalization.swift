@@ -8,8 +8,7 @@ enum XboxHID {
     static let elite2ProductID = 0x0B22
 
     static let buttonPage = 0x09
-    static let consumerPage = 0x0C
-    static let elite2ViewUsage = 0xB2
+    static let genericDesktopPage = 0x01
 
     // Xbox Bluetooth reports its analog triggers on the Simulation Controls page.
     static let simulationPage = 0x02
@@ -22,21 +21,16 @@ enum XboxHID {
 
     /// JoyCoding stores the conventional Xbox numbering (1=A, 2=B, 3=X, ...),
     /// but the Elite Series 2 BLE descriptor deliberately leaves holes for the
-    /// legacy C/Z and digital-trigger fields. Its View button is also exposed as
-    /// Consumer/Record rather than on the Button page. Normalize at the HID
-    /// boundary so profiles and the mapping UI remain conventional.
+    /// legacy C/Z and digital-trigger fields. Normalize at the HID boundary so
+    /// profiles and the mapping UI remain conventional.
     static func canonicalButton(vendor: Int, product: Int, usagePage: Int,
                                 usage: Int) -> Int? {
-        guard usagePage == buttonPage ||
-                (vendor == vendorID && product == elite2ProductID &&
-                 usagePage == consumerPage && usage == elite2ViewUsage)
-        else { return nil }
+        guard usagePage == buttonPage else { return nil }
 
         guard vendor == vendorID && product == elite2ProductID else {
             return usagePage == buttonPage ? usage : nil
         }
 
-        if usagePage == consumerPage { return 7 } // View
         return [
             1: 1,   // A
             2: 2,   // B
@@ -44,12 +38,31 @@ enum XboxHID {
             5: 4,   // Y
             7: 5,   // LB
             8: 6,   // RB
-            11: 8,  // Menu
-            12: 12, // Profile
+            11: 7,  // View
+            12: 8,  // Menu
             13: 11, // Xbox / Guide (macOS may reserve it)
             14: 9,  // L3
             15: 10, // R3
         ][usage]
+    }
+
+    enum AxisComponent: Equatable { case x, y }
+    struct StickAxis: Equatable {
+        let channel: StickChannel
+        let component: AxisComponent
+    }
+
+    /// Xbox BLE exposes left X/Y as usages 0x30/0x31 and right X/Y as
+    /// 0x32/0x35 on Generic Desktop. Profile remains hardware-only.
+    static func stickAxis(vendor: Int, usagePage: Int, usage: Int) -> StickAxis? {
+        guard vendor == vendorID, usagePage == genericDesktopPage else { return nil }
+        switch usage {
+        case 0x30: return StickAxis(channel: .left, component: .x)
+        case 0x31: return StickAxis(channel: .left, component: .y)
+        case 0x32: return StickAxis(channel: .right, component: .x)
+        case 0x35: return StickAxis(channel: .right, component: .y)
+        default: return nil
+        }
     }
 
     static func displayName(vendor: Int, product: Int, reported: String) -> String {
@@ -91,5 +104,23 @@ enum HIDNormalization {
         guard logicalMax > logicalMin else { return false }
         let progress = Double(raw - logicalMin) / Double(logicalMax - logicalMin)
         return wasPressed ? progress >= 0.05 : progress >= 0.10
+    }
+
+    /// Normalize a signed or unsigned HID axis into -1...1.
+    static func axis(raw: Int, logicalMin: Int, logicalMax: Int) -> Double {
+        guard logicalMax > logicalMin else { return 0 }
+        let progress = Double(raw - logicalMin) / Double(logicalMax - logicalMin)
+        return min(1, max(-1, progress * 2 - 1))
+    }
+
+    /// Reduce an analog stick to the same clockwise cardinal values used by a
+    /// HID hat: up=0, right=2, down=4, left=6. Separate engage/release thresholds
+    /// stop centre noise from repeatedly starting and cancelling an action.
+    static func stickDirection(x: Double, y: Double, previous: Int?) -> Int? {
+        let magnitude = max(abs(x), abs(y))
+        let threshold = previous == nil ? 0.55 : 0.35
+        guard magnitude >= threshold else { return nil }
+        if abs(x) > abs(y) { return x > 0 ? 2 : 6 }
+        return y > 0 ? 4 : 0
     }
 }

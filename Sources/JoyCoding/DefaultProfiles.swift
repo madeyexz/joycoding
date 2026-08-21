@@ -23,14 +23,14 @@ enum DefaultProfiles {
 
     /// 十字键的帽子开关值是 HID 标准 (0=上 2=右 4=下 6=左), 不用学。
     /// Joy-Con 的摇杆才需要现场学 —— 横持竖持会整体旋转。
-    private static let dpad: [String: StickDir] = [
+    static let dpad: [String: StickDir] = [
         "up":    .init(hat: 0, action: "scrollUp"),
         "right": .init(hat: 2, action: "sessionNext"),
         "down":  .init(hat: 4, action: "scrollDown"),
         "left":  .init(hat: 6, action: "sessionPrev"),
     ]
     /// 右摇杆默认当方向键用: 选菜单、挪光标
-    private static let rightStick: [String: StickDir] = [
+    static let rightStick: [String: StickDir] = [
         "up":    .init(hat: 0, action: "up"),
         "right": .init(hat: 2, action: "right"),
         "down":  .init(hat: 4, action: "down"),
@@ -52,10 +52,10 @@ enum DefaultProfiles {
             8: "raycastLauncher", // Menu
             9: "cancel",        // left stick click
             10: "sideChat",     // right stick click
-            12: "raycastWeChat", // Share; Profile on Elite Series 2
             XboxHID.leftTriggerButton: "ptt",
             XboxHID.rightTriggerButton: "switchApp",
             // 11 = Xbox button: macOS reserves the guide/menu behaviour.
+            // Elite Profile is handled by the controller and emits no HID event.
         ])
         // Long presses preserve every existing tap while exposing common work apps directly.
         p.buttons["3"]?.long = "raycastEmojiPicker" // X tap still clears input
@@ -65,8 +65,11 @@ enum DefaultProfiles {
         p.buttons["8"]?.long = "raycastAIChat"
         p.buttons["9"]?.long = "raycastCodex"       // L3 tap still cancels
         p.buttons["10"]?.long = "raycastAmp"        // R3 tap still opens side chat
-        p.buttons["12"]?.long = "raycastHeptabase"  // Profile tap still opens WeChat
-        p.sticks = ["hat": dpad]
+        p.sticks = [
+            StickChannel.hat.rawValue: dpad,
+            StickChannel.left.rawValue: dpad,
+            StickChannel.right.rawValue: rightStick,
+        ]
         p.overrides = [
             BundleID.chrome: AppOverride(buttons: [
                 "3": ButtonBinding(tap: "reload", long: "raycastEmojiPicker"),

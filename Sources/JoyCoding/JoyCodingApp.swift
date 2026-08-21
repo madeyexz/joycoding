@@ -51,9 +51,11 @@ struct JoyCodingApp: App {
 /// 自己管设置窗口。SwiftUI 的 Settings scene 要靠 showSettingsWindow: 这个
 /// 私有 selector 打开, 在 .accessory 策略的菜单栏 app 里经常发不出去,
 /// 或者窗口开在别的 app 后面。直接持有 NSWindow 最稳。
-final class SettingsWindow {
+final class SettingsWindow: NSObject, NSWindowDelegate {
     static let shared = SettingsWindow()
     private var window: NSWindow?
+
+    private override init() { super.init() }
 
     func show(tab: SettingsNav.Tab? = nil) {
         HIDProof.shared.record("settingsWindow", ["stage": "show"])
@@ -74,11 +76,16 @@ final class SettingsWindow {
         w.contentMinSize = NSSize(width: 1060, height: 700)
         w.center()
         w.isReleasedWhenClosed = false
+        w.delegate = self
         window = w
         w.makeKeyAndOrderFront(nil)
         HIDProof.shared.record("settingsWindow", [
             "stage": "visible", "windowNumber": w.windowNumber,
         ])
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        HIDInput.shared.setTestMode(false)
     }
 }
 
