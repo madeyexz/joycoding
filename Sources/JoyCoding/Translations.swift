@@ -9,8 +9,8 @@ enum Translations {
         "whitelistHint": "关掉的话所有 app 都生效。不建议——Finder 里回车是重命名，"
             + "对话框里回车是确定，手柄放桌上碰一下就可能出事。\n"
             + "语音和切换 app 不受此限制，任何地方都能用。",
-        "pttStyleHint": "Typeless、VoiceInk 这类「按住热键」的工具选第一个；macOS 自带听写是 toggle 语义，选第二个。",
-        "pttKeyHint": "填修饰键时会合成 flagsChanged 事件，效果等同于物理按住那颗键。按下时必须带上自己的 flag，否则监听方看到的是「已松开」——这是本项目实测踩过的坑。",
+        "pttStyleHint": "Raycast、Typeless、VoiceInk 这类支持 push-to-talk 的工具选第一个；macOS 自带听写是 toggle 语义，选第二个。",
+        "pttKeyHint": "组合键会合成完整的物理按键顺序，并保留左／右修饰键身份；这对单独绑定 Right Shift 的听写工具很重要。",
         "pttFuseHint": "手柄在你按住时掉线的话，「松开」事件永远不会来，修饰键会一直卡住，整台机器基本没法用。这是兜底。",
         "remoteWarn": "⚠️ 这个接口等于把键盘权限开到网络上。只在内网或 Tailscale 里用，绝对不要做端口转发暴露到公网。",
         "axGranted": "手柄按键要靠它翻译成键盘事件，这一项是整个 app 的前提。",
@@ -78,6 +78,10 @@ enum Translations {
         "切换 app": "Switch app",
         "切到 Claude Code": "Go to Claude Code",
         "切到 Ghostty": "Go to Ghostty",
+        "切到 Arc": "Go to Arc",
+        "切到 Slack": "Go to Slack",
+        "切到 Heptabase": "Go to Heptabase",
+        "切到 Codex": "Go to Codex",
         "切到微信": "Go to WeChat",
         "切到 Chrome": "Go to Chrome",
         "情境动作": "Context action",
@@ -245,11 +249,12 @@ enum Translations {
         "device:        (没有手柄连接)": "device:        (no controller connected)",
         "⚠️ 没有匹配的配置": "⚠️ no matching profile",
         "  电量 — (": "  battery — (",
-        "pttStyleHint": "Choose the first for hold-to-talk tools like Typeless or VoiceInk; macOS dictation is a toggle, so pick the second.",
-        "pttKeyHint": "A modifier is sent as a flagsChanged event, exactly like physically holding that key. Its own flag must be set on key-down, or listeners read it as released — a pitfall this project hit in testing.",
+        "pttStyleHint": "Choose the first for push-to-talk tools like Raycast, Typeless, or VoiceInk; macOS dictation is a toggle, so pick the second.",
+        "pttKeyHint": "Shortcut chords send the complete physical key sequence and preserve left/right modifier identity — important when a dictation tool binds Right Shift specifically.",
         "pttFuseHint": "If the controller disconnects mid-hold, the release event never arrives and the modifier stays stuck, making the machine unusable. This is the backstop.",
         "remoteWarn": "⚠️ This endpoint hands keyboard access to the network. Use it on a trusted LAN or Tailscale only — never port-forward it.",
         "D（配合下面的修饰键）": "D (with the modifiers below)",
+        "右 Shift 修饰键": "Right Shift modifier",
         "按键 %@ [%@] -> %@": "Button %@ [%@] -> %@",
         "SetReport 失败 0x%%08X": "SetReport failed 0x%%08X",
         "pairBtn": "Pair",
@@ -264,4 +269,3 @@ enum Translations {
             + "everything else gets English.",
     ]
 }
-

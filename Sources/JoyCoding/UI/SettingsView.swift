@@ -191,6 +191,15 @@ struct VoiceView: View {
     @State private var testing = false
     @State private var testLeft = 0
 
+    private var rightShiftModifier: Binding<Bool> {
+        Binding(
+            get: { store.config.pttMods.contains { $0.lowercased() == "rightshift" } },
+            set: { enabled in
+                store.config.pttMods.removeAll { $0.lowercased() == "rightshift" }
+                if enabled { store.config.pttMods.append("rightshift") }
+            })
+    }
+
     /// 走 Actions 的真实 PTT 路径, 不另写一份 —— 否则测的就不是实际会发生的事
     private func runTest() {
         guard !testing else { return }
@@ -230,11 +239,12 @@ struct VoiceView: View {
             Section(L("发给听写工具的热键")) {
                 HStack {
                     Picker(L("按键"), selection: $store.config.pttKey) {
-                    Text(L("左 Control")).tag("ctrl")
-                    Text(L("右 Control")).tag("rightctrl")
-                    Text(L("左 Option")).tag("alt")
-                    Text(L("右 Option")).tag("rightalt")
-                    Text("Fn").tag("fn")
+                        Text(L("左 Control")).tag("ctrl")
+                        Text(L("右 Control")).tag("rightctrl")
+                        Text(L("左 Option")).tag("alt")
+                        Text(L("右 Option")).tag("rightalt")
+                        Text("Fn").tag("fn")
+                        Text("Return / Enter").tag("return")
                         Text(L("D（配合下面的修饰键）")).tag("d")
                     }
                     Spacer()
@@ -242,6 +252,7 @@ struct VoiceView: View {
                     Button(testing ? L("测试中… %@", String(testLeft)) : L("测试")) { runTest() }
                         .disabled(testing)
                 }
+                Toggle(L("右 Shift 修饰键"), isOn: rightShiftModifier)
                 Text(L("pttKeyHint"))
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text(L("pttTestHint"))

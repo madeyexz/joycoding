@@ -170,10 +170,11 @@ struct Config: Codable {
         httpInterface     = v(.httpInterface, "all")
         restrictToTargets = v(.restrictToTargets, true)
         targetApps        = v(.targetApps, [BundleID.ghostty, BundleID.claude,
-                                            BundleID.wechat, BundleID.chrome])
+                                            BundleID.wechat, BundleID.chrome, BundleID.arc,
+                                            BundleID.slack, BundleID.heptabase, BundleID.codex])
         pttStyle          = v(.pttStyle, "hold")
-        pttKey            = v(.pttKey, "ctrl")
-        pttMods           = v(.pttMods, [String]())
+        pttKey            = v(.pttKey, "return")
+        pttMods           = v(.pttMods, ["rightshift"])
         pttMaxHold        = v(.pttMaxHold, 60)
         showBatteryInMenuBar = v(.showBatteryInMenuBar, true)
         appearance        = v(.appearance, "system")
@@ -196,16 +197,17 @@ struct Config: Codable {
     /// 确认对话框里误触。语音和切 app 不受此限制。
     var restrictToTargets = true
     var targetApps: [String] = [
-        BundleID.ghostty, BundleID.claude, BundleID.wechat, BundleID.chrome,
+        BundleID.ghostty, BundleID.claude, BundleID.wechat, BundleID.chrome, BundleID.arc,
+        BundleID.slack, BundleID.heptabase, BundleID.codex,
     ]
 
-    /// "hold"   = 按住录, 松开出字 (Typeless / VoiceInk)
+    /// "hold"   = 按住录, 松开出字 (Raycast / Typeless / VoiceInk)
     /// "tap"    = 按一下开始, 再按一下停止 (macOS 自带听写)
     /// "toggle" = 按住说话, 但底层是 toggle 式听写
     var pttStyle = "hold"
-    /// 可以直接填修饰键名("ctrl"/"alt"/"shift"/"cmd"), 会合成 flagsChanged 事件
-    var pttKey = "ctrl"
-    var pttMods: [String] = []
+    /// 此 fork 默认匹配 Raycast 的 Right Shift + Return push-to-talk 热键。
+    var pttKey = "return"
+    var pttMods: [String] = ["rightshift"]
     /// 保险丝: 按住超过这么久强制松开, 防手柄掉线导致修饰键卡死
     var pttMaxHold: Double = 60
 
@@ -250,6 +252,10 @@ enum AppName {
         case BundleID.claude:  return "Claude Code"
         case BundleID.wechat:  return L("微信")
         case BundleID.chrome:  return "Chrome"
+        case BundleID.arc:     return "Arc"
+        case BundleID.slack:   return "Slack"
+        case BundleID.heptabase: return "Heptabase"
+        case BundleID.codex:   return "Codex"
         default: return bid.split(separator: ".").last.map(String.init) ?? bid
         }
     }
@@ -260,6 +266,10 @@ enum BundleID {
     static let claude  = "com.anthropic.claudefordesktop"
     static let wechat  = "com.tencent.xinWeChat"
     static let chrome  = "com.google.Chrome"
+    static let arc     = "company.thebrowser.Browser"
+    static let slack   = "com.tinyspeck.slackmacgap"
+    static let heptabase = "app.projectmeta.projectmeta"
+    static let codex   = "com.openai.codex"
 }
 
 // MARK: - 存取

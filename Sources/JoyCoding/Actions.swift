@@ -186,6 +186,20 @@ enum Actions {
             send("closeTab")
         },
 
+        // ── Arc ──────────────────────────────────────────────
+        // IDs 独立于 Chrome，映射界面才能在 Arc 层正确显示可用动作；
+        // 最终仍走同一组浏览器语义键位。
+        ActionDef("arcNavBack", L("后退"), "Cmd+[", group: "Arc", repeatable: true,
+                  onlyIn: BundleID.arc) { send("navBack") },
+        ActionDef("arcNavForward", L("前进"), "Cmd+]", group: "Arc", repeatable: true,
+                  onlyIn: BundleID.arc) { send("navForward") },
+        ActionDef("arcReload", L("刷新页面"), "Cmd+R", group: "Arc",
+                  onlyIn: BundleID.arc) { send("reload") },
+        ActionDef("arcNewTab", L("新建标签"), "Cmd+T", group: "Arc",
+                  onlyIn: BundleID.arc) { send("newTab") },
+        ActionDef("arcCloseTab", L("关闭当前标签"), L("Cmd+W；最后一个标签会连窗口一起关"),
+                  group: "Arc", onlyIn: BundleID.arc) { send("closeTab") },
+
         // ── 切换 app (不受白名单限制, 任何地方都能用) ──────────
         ActionDef("switchApp", L("切换到上一个 app"), L("连按继续往前翻"), group: L("切换 app")) {
             ctx.switchToPrevious()
@@ -194,6 +208,12 @@ enum Actions {
         ActionDef("focusGhostty", L("切到 Ghostty"), group: L("切换 app")) { ctx.focus(BundleID.ghostty) },
         ActionDef("focusWeChat", L("切到微信"), group: L("切换 app")) { ctx.focus(BundleID.wechat) },
         ActionDef("focusChrome", L("切到 Chrome"), group: L("切换 app")) { ctx.focus(BundleID.chrome) },
+        ActionDef("focusArc", L("切到 Arc"), group: L("切换 app")) { ctx.focus(BundleID.arc) },
+        ActionDef("focusSlack", L("切到 Slack"), group: L("切换 app")) { ctx.focus(BundleID.slack) },
+        ActionDef("focusHeptabase", L("切到 Heptabase"), group: L("切换 app")) {
+            ctx.focus(BundleID.heptabase)
+        },
+        ActionDef("focusCodex", L("切到 Codex"), group: L("切换 app")) { ctx.focus(BundleID.codex) },
     ]
 
     static let byID: [String: ActionDef] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
@@ -224,7 +244,7 @@ enum Actions {
     static func pttStart() {
         let cfg = ConfigStore.shared.config
         guard cfg.pttStyle == "hold" else {
-            KeySynth.keyStroke(cfg.pttMods, cfg.pttKey); return
+            KeySynth.shortcutStroke(cfg.pttMods, cfg.pttKey); return
         }
         pttPost(down: true)
         // 保险丝: 手柄掉线 / 松开事件丢了, 也不能让修饰键永远卡住
@@ -242,7 +262,7 @@ enum Actions {
             pttWatchdog?.invalidate(); pttWatchdog = nil
             pttPost(down: false)
         case "toggle":
-            KeySynth.keyStroke(cfg.pttMods, cfg.pttKey)
+            KeySynth.shortcutStroke(cfg.pttMods, cfg.pttKey)
         default:
             break   // "tap": 松开不做事, 靠下次按下停止听写
         }
@@ -252,10 +272,8 @@ enum Actions {
         let cfg = ConfigStore.shared.config
         if KeySynth.isModifier(cfg.pttKey) {
             KeySynth.modifierHold(cfg.pttKey, down: down)
-        } else if down {
-            KeySynth.keyDown(cfg.pttMods, cfg.pttKey)
         } else {
-            KeySynth.keyUp(cfg.pttMods, cfg.pttKey)
+            KeySynth.shortcutHold(cfg.pttMods, cfg.pttKey, down: down)
         }
     }
 }

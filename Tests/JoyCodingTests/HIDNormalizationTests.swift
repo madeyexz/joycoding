@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import JoyCoding
 
 final class HIDNormalizationTests: XCTestCase {
@@ -45,7 +46,32 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertEqual(profile.buttons["1"]?.tap, "confirm")
         XCTAssertEqual(profile.buttons[String(XboxHID.leftTriggerButton)]?.tap, "ptt")
         XCTAssertEqual(profile.buttons[String(XboxHID.rightTriggerButton)]?.tap, "switchApp")
+        XCTAssertEqual(profile.buttons["5"]?.long, "focusSlack")
+        XCTAssertEqual(profile.buttons["6"], ButtonBinding(tap: "focusArc", long: "focusGhostty"))
+        XCTAssertEqual(profile.buttons["9"]?.long, "focusCodex")
+        XCTAssertEqual(profile.buttons["12"]?.long, "focusHeptabase")
+        XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.tap, "arcReload")
         XCTAssertEqual(profile.sticks["hat"]?["up"], StickDir(hat: 0, action: "scrollUp"))
         XCTAssertEqual(profile.sticks["hat"]?["right"], StickDir(hat: 2, action: "sessionNext"))
+    }
+
+    func testRightShiftReturnKeepsSidedModifierIdentity() {
+        let config = Config()
+        XCTAssertEqual(config.pttStyle, "hold")
+        XCTAssertEqual(config.pttKey, "return")
+        XCTAssertEqual(config.pttMods, ["rightshift"])
+
+        let rightShift = KeySynth.modifierFlag["rightshift"]!
+        let down = KeySynth.shortcutEvents(["rightshift"], "return", down: true)
+        XCTAssertEqual(down, [
+            KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 60, flags: rightShift),
+            KeySynth.ShortcutEvent(kind: .keyDown, keyCode: 36, flags: rightShift),
+        ])
+
+        let up = KeySynth.shortcutEvents(["rightshift"], "return", down: false)
+        XCTAssertEqual(up, [
+            KeySynth.ShortcutEvent(kind: .keyUp, keyCode: 36, flags: rightShift),
+            KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 60, flags: []),
+        ])
     }
 }

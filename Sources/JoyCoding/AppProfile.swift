@@ -99,6 +99,16 @@ enum AppProfiles {
             "closeTab":    .init("cmd+w"),
             "windowNext":  .init("cmd+`"),
         ],
+        BundleID.arc: [
+            "sessionPrev": .init("ctrl+shift+tab"),
+            "sessionNext": .init("ctrl+tab"),
+            "navBack":     .init("cmd+["),
+            "navForward":  .init("cmd+]"),
+            "reload":      .init("cmd+r"),
+            "newTab":      .init("cmd+t"),
+            "closeTab":    .init("cmd+w"),
+            "windowNext":  .init("cmd+`"),
+        ],
         // 以下为预置, 方便不用 Claude Code 的用户开箱即用
         "com.openai.chat": [                        // ChatGPT
             "focusInput":  .init("shift+escape"),   // ChatGPT 有这个, Claude 没有

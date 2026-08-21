@@ -16,6 +16,8 @@ enum DictationApps {
     }
 
     static let known: [Known] = [
+        Known(bundleID: "com.raycast.macos",          name: "Raycast"),
+        Known(bundleID: "com.raycast-x.macos",        name: "Raycast Beta"),
         Known(bundleID: "now.typeless.desktop",     name: "Typeless"),
         Known(bundleID: "com.prakashjoshipax.VoiceInk", name: "VoiceInk"),
         Known(bundleID: "com.superduper.superwhisper", name: "superwhisper"),

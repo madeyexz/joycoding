@@ -5,6 +5,14 @@ import AppKit
 /// 键盘 / 滚轮事件合成。等价于 Hammerspoon 的 hs.eventtap, 但是原生 CGEvent。
 enum KeySynth {
 
+    struct ShortcutEvent: Equatable {
+        enum Kind: Equatable { case flagsChanged, keyDown, keyUp }
+
+        let kind: Kind
+        let keyCode: CGKeyCode
+        let flags: CGEventFlags
+    }
+
     // MARK: - 键名 -> 虚拟键码
 
     static let keyCodes: [String: CGKeyCode] = [
@@ -27,7 +35,11 @@ enum KeySynth {
     /// 监听方看到的是"已松开"——按住说话就会失效。本项目实测踩过这个坑。
     static let modifierFlag: [String: CGEventFlags] = [
         "cmd": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "ctrl": .maskControl,
-        "rightshift": .maskShift, "rightalt": .maskAlternate, "rightctrl": .maskControl,
+        // 右侧修饰键除了 device-independent flag，还要带 IOLLEvent.h 里的
+        // device-specific bit；否则全局热键只能看到 "Shift"，看不到 "Right Shift"。
+        "rightshift": [.maskShift, CGEventFlags(rawValue: 0x00000004)],
+        "rightalt": [.maskAlternate, CGEventFlags(rawValue: 0x00000040)],
+        "rightctrl": [.maskControl, CGEventFlags(rawValue: 0x00002000)],
         "fn": .maskSecondaryFn,
     ]
 
@@ -46,6 +58,63 @@ enum KeySynth {
         post(code, down: false, flags: f)
     }
 
+    /// 合成一整组物理快捷键事件。普通 CGEvent 只在主键上挂 modifier flags，
+    /// 会丢掉左/右侧信息；Raycast 这类工具能把 Right Shift 单独绑定成热键，
+    /// 所以必须真的发 keyCode 60 的 flagsChanged，再发带 Shift flag 的主键。
+    static func shortcutStroke(_ mods: [String], _ key: String) {
+        shortcutHold(mods, key, down: true)
+        shortcutHold(mods, key, down: false)
+    }
+
+    /// 按下或松开一个完整快捷键，供 PTT 在手柄按住期间保持物理语义。
+    static func shortcutHold(_ mods: [String], _ key: String, down: Bool) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        for event in shortcutEvents(mods, key, down: down) {
+            switch event.kind {
+            case .flagsChanged:
+                postFlagsChanged(event.keyCode, flags: event.flags, source: source)
+            case .keyDown:
+                post(event.keyCode, down: true, flags: event.flags, source: source)
+            case .keyUp:
+                post(event.keyCode, down: false, flags: event.flags, source: source)
+            }
+        }
+    }
+
+    /// 分离成纯事件计划，既方便验证，也确保按下/松开的 flag 顺序完全对称。
+    static func shortcutEvents(_ mods: [String], _ key: String, down: Bool) -> [ShortcutEvent] {
+        guard let keyCode = keyCodes[key.lowercased()] else { return [] }
+
+        var seenFlags = Set<UInt64>()
+        let modifiers: [(code: CGKeyCode, flag: CGEventFlags)] = mods.compactMap { raw in
+            let name = raw.lowercased()
+            guard let code = keyCodes[name], let flag = modifierFlag[name],
+                  seenFlags.insert(flag.rawValue).inserted else { return nil }
+            return (code, flag)
+        }
+        let allFlags = modifiers.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
+
+        if down {
+            var active: CGEventFlags = []
+            var events = modifiers.map { modifier -> ShortcutEvent in
+                active.insert(modifier.flag)
+                return ShortcutEvent(kind: .flagsChanged,
+                                     keyCode: modifier.code, flags: active)
+            }
+            events.append(ShortcutEvent(kind: .keyDown, keyCode: keyCode, flags: allFlags))
+            return events
+        }
+
+        var active = allFlags
+        var events = [ShortcutEvent(kind: .keyUp, keyCode: keyCode, flags: allFlags)]
+        for modifier in modifiers.reversed() {
+            active.remove(modifier.flag)
+            events.append(ShortcutEvent(kind: .flagsChanged,
+                                        keyCode: modifier.code, flags: active))
+        }
+        return events
+    }
+
     static func keyDown(_ mods: [String], _ key: String) {
         guard let code = keyCodes[key.lowercased()] else { return }
         post(code, down: true, flags: flags(mods))
@@ -56,10 +125,20 @@ enum KeySynth {
         post(code, down: false, flags: flags(mods))
     }
 
-    private static func post(_ code: CGKeyCode, down: Bool, flags f: CGEventFlags) {
-        let src = CGEventSource(stateID: .hidSystemState)
+    private static func post(_ code: CGKeyCode, down: Bool, flags f: CGEventFlags,
+                             source: CGEventSource? = nil) {
+        let src = source ?? CGEventSource(stateID: .hidSystemState)
         guard let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down) else { return }
         e.flags = f
+        e.post(tap: .cghidEventTap)
+    }
+
+    private static func postFlagsChanged(_ code: CGKeyCode, flags: CGEventFlags,
+                                         source: CGEventSource? = nil) {
+        let src = source ?? CGEventSource(stateID: .hidSystemState)
+        guard let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true) else { return }
+        e.type = .flagsChanged
+        e.flags = flags
         e.post(tap: .cghidEventTap)
     }
 

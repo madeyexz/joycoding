@@ -57,9 +57,18 @@ enum DefaultProfiles {
             XboxHID.rightTriggerButton: "switchApp",
             // 11 = Xbox button: macOS reserves the guide/menu behaviour.
         ])
+        // Long presses preserve every existing tap while exposing common work apps directly.
+        p.buttons["5"]?.long = "focusSlack"       // LB tap still confirms
+        p.buttons["6"] = ButtonBinding(tap: "focusArc", long: "focusGhostty")
+        p.buttons["9"]?.long = "focusCodex"       // L3 tap still cancels
+        p.buttons["12"]?.long = "focusHeptabase"   // Share tap still opens WeChat
         p.sticks = ["hat": dpad]
-        p.overrides = [BundleID.chrome: AppOverride(
-            buttons: b([3: "reload", 4: "navBack", 7: "closeTab"]))]
+        p.overrides = [
+            BundleID.chrome: AppOverride(
+                buttons: b([3: "reload", 4: "navBack", 7: "closeTab"])),
+            BundleID.arc: AppOverride(
+                buttons: b([3: "arcReload", 4: "arcNavBack", 7: "arcCloseTab"])),
+        ]
         return p
     }
 

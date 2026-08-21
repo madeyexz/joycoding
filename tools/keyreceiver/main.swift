@@ -22,13 +22,26 @@ private final class ReceiverView: NSView {
     required init?(coder: NSCoder) { nil }
 
     override func keyDown(with event: NSEvent) {
+        record(event: event, kind: "keyDown")
+    }
+
+    override func keyUp(with event: NSEvent) {
+        record(event: event, kind: "keyUp")
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        record(event: event, kind: "flagsChanged")
+    }
+
+    private func record(event: NSEvent, kind: String) {
         let record: [String: Any] = [
-            "event": "keyDown",
+            "event": kind,
             "keyCode": Int(event.keyCode),
             "characters": event.charactersIgnoringModifiers ?? "",
+            "modifierFlags": Int(event.modifierFlags.rawValue),
             "time": ISO8601DateFormatter().string(from: Date()),
         ]
-        status.stringValue = "RECEIVED keyCode=\(event.keyCode)"
+        status.stringValue = "RECEIVED \(kind) keyCode=\(event.keyCode)"
         guard let logURL,
               var data = try? JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
         else { return }

@@ -205,6 +205,9 @@ final class HTTPServer: ObservableObject {
         case BundleID.chrome:
             return [("navBack", "←", L("后退")), ("reload", "⟳", L("刷新")),
                     ("closeTab", "✕", L("关标签")), ("newTab", "＋", L("新标签"))]
+        case BundleID.arc:
+            return [("arcNavBack", "←", L("后退")), ("arcReload", "⟳", L("刷新")),
+                    ("arcCloseTab", "✕", L("关标签")), ("arcNewTab", "＋", L("新标签"))]
         case BundleID.wechat:
             return [("delete", "⌫", L("退格")), ("clearLine", "⌧", L("清空")),
                     ("wechatNextUnread", "◉", L("未读")), ("focusInput", "⌖", L("聚焦"))]
@@ -244,9 +247,13 @@ final class HTTPServer: ObservableObject {
     /// 手机切换条用的 app 列表: (bundleID, 短名, 对应的切换动作)
     private func cfgApps() -> [(String, String, String)] {
         let short = [BundleID.claude: "Claude", BundleID.ghostty: "Ghostty",
-                     BundleID.wechat: L("微信"),   BundleID.chrome: "Chrome"]
+                     BundleID.wechat: L("微信"), BundleID.chrome: "Chrome",
+                     BundleID.arc: "Arc", BundleID.slack: "Slack",
+                     BundleID.heptabase: "Heptabase", BundleID.codex: "Codex"]
         let act = [BundleID.claude: "focusClaude", BundleID.ghostty: "focusGhostty",
-                   BundleID.wechat: "focusWeChat", BundleID.chrome: "focusChrome"]
+                   BundleID.wechat: "focusWeChat", BundleID.chrome: "focusChrome",
+                   BundleID.arc: "focusArc", BundleID.slack: "focusSlack",
+                   BundleID.heptabase: "focusHeptabase", BundleID.codex: "focusCodex"]
         let cfg = ConfigStore.shared.config
         // 用户在设置里指定了四角就按他的来, 没指定则自动取白名单前四个
         let list = cfg.remoteCorners.isEmpty
