@@ -325,12 +325,23 @@ local state endpoint: `testMode` changed from `true` to `false` and
 
 ## Controller illustration
 
-The Xbox-specific graphic now uses a dedicated Elite-style shell, an actual
-D-pad, symbolic View/Menu controls, colored ABXY legends, and subtle grip
-materials. Idle analog-direction arrows are intentionally absent; only the
-currently active direction appears during a live press.
+The installed app now renders the controller from Xelu's full Xbox Series SVG
+diagram (CC0), rather than approximating the controller with a handful of
+SwiftUI curves. JoyCoding adds its own dark shell backing, exact live-input
+anchors, colored ABXY caps, and Elite Series 2-specific faceted D-pad and
+Profile control over the source geometry. The SVG remains resolution-
+independent; live highlights remain app code.
 
-![JoyCoding Xbox controller illustration](images/proof/controller-art-v2.jpg)
+The screenshot below is the signed `/Applications/JoyCoding.app` with the
+physical `045E:0B22` device connected and Test Mode enabled. It is not a design
+mockup. The deterministic `JOYCODING_UI_PREVIEW=xboxElite2` launch hook is
+available for visual regression checks when the controller is asleep, and
+labels itself `UI preview` instead of `Connected`.
+
+![JoyCoding controller rendered from the CC0 SVG](images/proof/controller-art-xelu-svg.jpg)
+
+Screenshot SHA-256:
+`e0a605bf7f9c5473865c8273f239538b5e58d6ed134d2ad03e7093d328b186a4`
 
 ## Reproduce
 
