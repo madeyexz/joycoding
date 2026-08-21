@@ -214,7 +214,7 @@ enum Actions {
             ctx.focus(BundleID.heptabase)
         },
         ActionDef("focusCodex", L("切到 Codex"), group: L("切换 app")) { ctx.focus(BundleID.codex) },
-    ]
+    ] + RaycastShortcuts.actionDefinitions
 
     static let byID: [String: ActionDef] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
 
@@ -244,7 +244,7 @@ enum Actions {
     static func pttStart() {
         let cfg = ConfigStore.shared.config
         guard cfg.pttStyle == "hold" else {
-            KeySynth.shortcutStroke(cfg.pttMods, cfg.pttKey); return
+            pttStroke(cfg); return
         }
         pttPost(down: true)
         // 保险丝: 手柄掉线 / 松开事件丢了, 也不能让修饰键永远卡住
@@ -262,7 +262,7 @@ enum Actions {
             pttWatchdog?.invalidate(); pttWatchdog = nil
             pttPost(down: false)
         case "toggle":
-            KeySynth.shortcutStroke(cfg.pttMods, cfg.pttKey)
+            pttStroke(cfg)
         default:
             break   // "tap": 松开不做事, 靠下次按下停止听写
         }
@@ -270,10 +270,24 @@ enum Actions {
 
     private static func pttPost(down: Bool) {
         let cfg = ConfigStore.shared.config
+        if cfg.pttFollowRaycast,
+           let shortcut = RaycastShortcuts.shortcut(for: "raycastDictation") {
+            KeySynth.shortcutHold(shortcut.modifiers, keyCode: shortcut.keyCode, down: down)
+            return
+        }
         if KeySynth.isModifier(cfg.pttKey) {
             KeySynth.modifierHold(cfg.pttKey, down: down)
         } else {
             KeySynth.shortcutHold(cfg.pttMods, cfg.pttKey, down: down)
+        }
+    }
+
+    private static func pttStroke(_ cfg: Config) {
+        if cfg.pttFollowRaycast,
+           let shortcut = RaycastShortcuts.shortcut(for: "raycastDictation") {
+            KeySynth.shortcutStroke(shortcut.modifiers, keyCode: shortcut.keyCode)
+        } else {
+            KeySynth.shortcutStroke(cfg.pttMods, cfg.pttKey)
         }
     }
 }

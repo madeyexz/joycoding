@@ -66,10 +66,23 @@ enum KeySynth {
         shortcutHold(mods, key, down: false)
     }
 
+    /// Raycast stores shortcuts as macOS virtual key codes. Keeping that code intact
+    /// avoids guessing a keyboard-layout-dependent character when replaying one of
+    /// Raycast's own global hotkeys.
+    static func shortcutStroke(_ mods: [String], keyCode: CGKeyCode) {
+        shortcutHold(mods, keyCode: keyCode, down: true)
+        shortcutHold(mods, keyCode: keyCode, down: false)
+    }
+
     /// 按下或松开一个完整快捷键，供 PTT 在手柄按住期间保持物理语义。
     static func shortcutHold(_ mods: [String], _ key: String, down: Bool) {
+        guard let keyCode = keyCodes[key.lowercased()] else { return }
+        shortcutHold(mods, keyCode: keyCode, down: down)
+    }
+
+    static func shortcutHold(_ mods: [String], keyCode: CGKeyCode, down: Bool) {
         let source = CGEventSource(stateID: .hidSystemState)
-        for event in shortcutEvents(mods, key, down: down) {
+        for event in shortcutEvents(mods, keyCode: keyCode, down: down) {
             switch event.kind {
             case .flagsChanged:
                 postFlagsChanged(event.keyCode, flags: event.flags, source: source)
@@ -84,6 +97,11 @@ enum KeySynth {
     /// 分离成纯事件计划，既方便验证，也确保按下/松开的 flag 顺序完全对称。
     static func shortcutEvents(_ mods: [String], _ key: String, down: Bool) -> [ShortcutEvent] {
         guard let keyCode = keyCodes[key.lowercased()] else { return [] }
+        return shortcutEvents(mods, keyCode: keyCode, down: down)
+    }
+
+    static func shortcutEvents(_ mods: [String], keyCode: CGKeyCode,
+                               down: Bool) -> [ShortcutEvent] {
 
         var seenFlags = Set<UInt64>()
         let modifiers: [(code: CGKeyCode, flag: CGEventFlags)] = mods.compactMap { raw in

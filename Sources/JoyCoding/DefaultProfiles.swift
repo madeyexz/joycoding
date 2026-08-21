@@ -47,27 +47,37 @@ enum DefaultProfiles {
             3: "clearLine",     // X
             4: "delete",        // Y
             5: "confirm",       // LB — left-hand send
-            6: "focusGhostty",  // RB
+            6: "raycastArc",    // RB
             7: "focusInput",    // View
-            8: "modelMenu",     // Menu
+            8: "raycastLauncher", // Menu
             9: "cancel",        // left stick click
             10: "sideChat",     // right stick click
-            12: "focusWeChat",  // Share; Profile on Elite Series 2
+            12: "raycastWeChat", // Share; Profile on Elite Series 2
             XboxHID.leftTriggerButton: "ptt",
             XboxHID.rightTriggerButton: "switchApp",
             // 11 = Xbox button: macOS reserves the guide/menu behaviour.
         ])
         // Long presses preserve every existing tap while exposing common work apps directly.
-        p.buttons["5"]?.long = "focusSlack"       // LB tap still confirms
-        p.buttons["6"] = ButtonBinding(tap: "focusArc", long: "focusGhostty")
-        p.buttons["9"]?.long = "focusCodex"       // L3 tap still cancels
-        p.buttons["12"]?.long = "focusHeptabase"   // Share/Profile tap still opens WeChat
+        p.buttons["3"]?.long = "raycastEmojiPicker" // X tap still clears input
+        p.buttons["5"]?.long = "raycastSlack"       // LB tap still confirms
+        p.buttons["6"] = ButtonBinding(tap: "raycastArc", long: "raycastWarp")
+        p.buttons["7"]?.long = "raycastClipboardHistory"
+        p.buttons["8"]?.long = "raycastAIChat"
+        p.buttons["9"]?.long = "raycastCodex"       // L3 tap still cancels
+        p.buttons["10"]?.long = "raycastAmp"        // R3 tap still opens side chat
+        p.buttons["12"]?.long = "raycastHeptabase"  // Profile tap still opens WeChat
         p.sticks = ["hat": dpad]
         p.overrides = [
-            BundleID.chrome: AppOverride(
-                buttons: b([3: "reload", 4: "navBack", 7: "closeTab"])),
-            BundleID.arc: AppOverride(
-                buttons: b([3: "arcReload", 4: "arcNavBack", 7: "arcCloseTab"])),
+            BundleID.chrome: AppOverride(buttons: [
+                "3": ButtonBinding(tap: "reload", long: "raycastEmojiPicker"),
+                "4": ButtonBinding(tap: "navBack"),
+                "7": ButtonBinding(tap: "closeTab", long: "raycastClipboardHistory"),
+            ]),
+            BundleID.arc: AppOverride(buttons: [
+                "3": ButtonBinding(tap: "arcReload", long: "raycastEmojiPicker"),
+                "4": ButtonBinding(tap: "arcNavBack"),
+                "7": ButtonBinding(tap: "arcCloseTab", long: "raycastClipboardHistory"),
+            ]),
         ]
         return p
     }

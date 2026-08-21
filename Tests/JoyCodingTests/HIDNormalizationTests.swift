@@ -89,11 +89,17 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertEqual(profile.buttons["1"]?.tap, "confirm")
         XCTAssertEqual(profile.buttons[String(XboxHID.leftTriggerButton)]?.tap, "ptt")
         XCTAssertEqual(profile.buttons[String(XboxHID.rightTriggerButton)]?.tap, "switchApp")
-        XCTAssertEqual(profile.buttons["5"]?.long, "focusSlack")
-        XCTAssertEqual(profile.buttons["6"], ButtonBinding(tap: "focusArc", long: "focusGhostty"))
-        XCTAssertEqual(profile.buttons["9"]?.long, "focusCodex")
-        XCTAssertEqual(profile.buttons["12"]?.long, "focusHeptabase")
+        XCTAssertEqual(profile.buttons["3"]?.long, "raycastEmojiPicker")
+        XCTAssertEqual(profile.buttons["5"]?.long, "raycastSlack")
+        XCTAssertEqual(profile.buttons["6"], ButtonBinding(tap: "raycastArc", long: "raycastWarp"))
+        XCTAssertEqual(profile.buttons["7"]?.long, "raycastClipboardHistory")
+        XCTAssertEqual(profile.buttons["8"], ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
+        XCTAssertEqual(profile.buttons["9"]?.long, "raycastCodex")
+        XCTAssertEqual(profile.buttons["10"]?.long, "raycastAmp")
+        XCTAssertEqual(profile.buttons["12"], ButtonBinding(tap: "raycastWeChat", long: "raycastHeptabase"))
         XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.tap, "arcReload")
+        XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.long, "raycastEmojiPicker")
+        XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["7"]?.long, "raycastClipboardHistory")
         XCTAssertEqual(profile.sticks["hat"]?["up"], StickDir(hat: 0, action: "scrollUp"))
         XCTAssertEqual(profile.sticks["hat"]?["right"], StickDir(hat: 2, action: "sessionNext"))
     }
@@ -116,5 +122,78 @@ final class HIDNormalizationTests: XCTestCase {
             KeySynth.ShortcutEvent(kind: .keyUp, keyCode: 36, flags: rightShift),
             KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 60, flags: []),
         ])
+    }
+
+    func testRaycastSnapshotParsesExactGlobalHotkeys() throws {
+        let json = #"""
+        {"tables":{"general_settings":[{"globalHotkey":{"kind":{"type":"SingleStep","shortcut":{"modifiers":[{"modifier":"Meta"}],"key":{"code":49}}}}}],"commands":[{"id":"c:r:dictation::-::dictateText","enabled":true,"macosHotkey":{"kind":{"type":"SingleStep","shortcut":{"modifiers":[{"modifier":"Shift","directionality":"right"}],"key":{"code":36}}}}},{"id":"c:r:clipboard-history::-::history","enabled":true,"macosHotkey":{"kind":{"type":"SingleStep","shortcut":{"modifiers":[{"modifier":"Shift"},{"modifier":"Meta"}],"key":{"code":8}}}}}]}}
+        """#
+        let shortcuts = RaycastShortcuts.parseSnapshot(try XCTUnwrap(json.data(using: .utf8)))
+        XCTAssertEqual(shortcuts["raycastLauncher"],
+                       RaycastShortcut(modifiers: ["cmd"], keyCode: 49))
+        XCTAssertEqual(shortcuts["raycastClipboardHistory"],
+                       RaycastShortcut(modifiers: ["shift", "cmd"], keyCode: 8))
+        XCTAssertEqual(shortcuts["raycastDictation"],
+                       RaycastShortcut(modifiers: ["rightshift"], keyCode: 36))
+    }
+
+    func testRaycastVirtualKeyCodeProducesFullShortcutChord() {
+        let alt = KeySynth.modifierFlag["alt"]!
+        XCTAssertEqual(KeySynth.shortcutEvents(["alt"], keyCode: 49, down: true), [
+            KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 58, flags: alt),
+            KeySynth.ShortcutEvent(kind: .keyDown, keyCode: 49, flags: alt),
+        ])
+        XCTAssertEqual(KeySynth.shortcutEvents(["alt"], keyCode: 49, down: false), [
+            KeySynth.ShortcutEvent(kind: .keyUp, keyCode: 49, flags: alt),
+            KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 58, flags: []),
+        ])
+    }
+
+    func testExistingXboxProfileMigratesOnceWithoutOverwritingCustomBindings() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 0
+        var profile = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Wireless Controller")
+        profile.buttons = [
+            "5": ButtonBinding(tap: "confirm", long: "focusSlack"),
+            "6": ButtonBinding(tap: "focusArc", long: "focusGhostty"),
+            "8": ButtonBinding(tap: "modelMenu"),
+            "12": ButtonBinding(tap: "customWeChat", long: "focusHeptabase"),
+        ]
+        config.devices = [profile]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 1)
+        XCTAssertEqual(config.devices[0].buttons["5"]?.long, "raycastSlack")
+        XCTAssertEqual(config.devices[0].buttons["6"],
+                       ButtonBinding(tap: "raycastArc", long: "raycastWarp"))
+        XCTAssertEqual(config.devices[0].buttons["8"],
+                       ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
+        XCTAssertEqual(config.devices[0].buttons["12"]?.tap, "customWeChat")
+        XCTAssertEqual(config.devices[0].buttons["12"]?.long, "raycastHeptabase")
+    }
+
+    func testCurrentMacRaycastBindingsWhenExplicitlyRequested() throws {
+        guard ProcessInfo.processInfo.environment["JOYCODING_VERIFY_LOCAL_RAYCAST"] == "1"
+        else { throw XCTSkip("local Raycast verification is opt-in") }
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastLauncher"),
+                       RaycastShortcut(modifiers: ["cmd"], keyCode: 49))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastDictation"),
+                       RaycastShortcut(modifiers: ["rightshift"], keyCode: 36))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastAIChat"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 49))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastArc"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 0))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastSlack"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 1))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastCodex"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 8))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastHeptabase"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 14))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastAmp"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 7))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastWarp"),
+                       RaycastShortcut(modifiers: ["alt"], keyCode: 13))
     }
 }

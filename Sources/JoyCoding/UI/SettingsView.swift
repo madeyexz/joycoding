@@ -191,6 +191,11 @@ struct VoiceView: View {
     @State private var testing = false
     @State private var testLeft = 0
 
+    private var followsRaycast: Bool {
+        store.config.pttFollowRaycast &&
+            RaycastShortcuts.shortcut(for: "raycastDictation") != nil
+    }
+
     private var rightShiftModifier: Binding<Bool> {
         Binding(
             get: { store.config.pttMods.contains { $0.lowercased() == "rightshift" } },
@@ -237,6 +242,12 @@ struct VoiceView: View {
             }
 
             Section(L("发给听写工具的热键")) {
+                if let shortcut = RaycastShortcuts.shortcut(for: "raycastDictation") {
+                    Toggle(L("跟随 Raycast 听写快捷键"),
+                           isOn: $store.config.pttFollowRaycast)
+                    Text(L("raycastShortcutHint", shortcut.display))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 HStack {
                     Picker(L("按键"), selection: $store.config.pttKey) {
                         Text(L("左 Control")).tag("ctrl")
@@ -252,7 +263,9 @@ struct VoiceView: View {
                     Button(testing ? L("测试中… %@", String(testLeft)) : L("测试")) { runTest() }
                         .disabled(testing)
                 }
+                .disabled(followsRaycast)
                 Toggle(L("右 Shift 修饰键"), isOn: rightShiftModifier)
+                    .disabled(followsRaycast)
                 Text(L("pttKeyHint"))
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text(L("pttTestHint"))

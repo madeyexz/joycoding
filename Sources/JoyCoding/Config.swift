@@ -175,6 +175,7 @@ struct Config: Codable {
         pttStyle          = v(.pttStyle, "hold")
         pttKey            = v(.pttKey, "return")
         pttMods           = v(.pttMods, ["rightshift"])
+        pttFollowRaycast  = v(.pttFollowRaycast, true)
         pttMaxHold        = v(.pttMaxHold, 60)
         showBatteryInMenuBar = v(.showBatteryInMenuBar, true)
         appearance        = v(.appearance, "system")
@@ -183,6 +184,7 @@ struct Config: Codable {
         remoteCorners     = v(.remoteCorners, [String]())
         appProfiles       = v(.appProfiles, [String: AppKeyMap]())
         devices           = v(.devices, [DeviceProfile]())
+        xboxRaycastPresetVersion = v(.xboxRaycastPresetVersion, 0)
     }
 
     var httpEnabled = true
@@ -208,6 +210,8 @@ struct Config: Codable {
     /// 此 fork 默认匹配 Raycast 的 Right Shift + Return push-to-talk 热键。
     var pttKey = "return"
     var pttMods: [String] = ["rightshift"]
+    /// Follow Raycast's locally stored Dictation hotkey; manual fields remain as fallback.
+    var pttFollowRaycast = true
     /// 保险丝: 按住超过这么久强制松开, 防手柄掉线导致修饰键卡死
     var pttMaxHold: Double = 60
 
@@ -229,6 +233,43 @@ struct Config: Codable {
     var appProfiles: [String: AppKeyMap] = [:]
 
     var devices: [DeviceProfile] = []
+    /// Versioned so an existing Elite profile gets the Raycast layer once without
+    /// repeatedly overwriting later user customization.
+    var xboxRaycastPresetVersion = 1
+
+    mutating func migrateXboxRaycastPresetIfNeeded() {
+        guard xboxRaycastPresetVersion < 1 else { return }
+        defer { xboxRaycastPresetVersion = 1 }
+        for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
+            func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
+                         from old: String?, to new: String) {
+                guard devices[index].buttons[button]?[keyPath: path] == old else { return }
+                devices[index].buttons[button, default: ButtonBinding()][keyPath: path] = new
+            }
+            replace("3", \.long, from: nil, to: "raycastEmojiPicker")
+            replace("5", \.long, from: "focusSlack", to: "raycastSlack")
+            replace("6", \.tap, from: "focusArc", to: "raycastArc")
+            replace("6", \.long, from: "focusGhostty", to: "raycastWarp")
+            replace("7", \.long, from: nil, to: "raycastClipboardHistory")
+            replace("8", \.tap, from: "modelMenu", to: "raycastLauncher")
+            replace("8", \.long, from: nil, to: "raycastAIChat")
+            replace("9", \.long, from: "focusCodex", to: "raycastCodex")
+            replace("10", \.long, from: nil, to: "raycastAmp")
+            replace("12", \.tap, from: "focusWeChat", to: "raycastWeChat")
+            replace("12", \.long, from: "focusHeptabase", to: "raycastHeptabase")
+
+            for app in [BundleID.chrome, BundleID.arc] {
+                guard var override = devices[index].overrides[app] else { continue }
+                if override.buttons["3"]?.long == nil {
+                    override.buttons["3", default: ButtonBinding()].long = "raycastEmojiPicker"
+                }
+                if override.buttons["7"]?.long == nil {
+                    override.buttons["7", default: ButtonBinding()].long = "raycastClipboardHistory"
+                }
+                devices[index].overrides[app] = override
+            }
+        }
+    }
 
     mutating func profile(vendor: Int, product: Int, name: String) -> DeviceProfile {
         if let p = devices.first(where: { $0.vendorID == vendor && $0.productID == product }) {
@@ -301,6 +342,7 @@ final class ConfigStore: ObservableObject {
         }
         if config.httpToken.isEmpty { config.httpToken = ConfigStore.randomToken() }
         if config.pairCode.isEmpty { config.pairCode = ConfigStore.randomPairCode() }
+        config.migrateXboxRaycastPresetIfNeeded()
         // Swift 的属性观察器在 init 里赋值不触发, 首次生成的配置不会自动落盘。
         save()
     }
