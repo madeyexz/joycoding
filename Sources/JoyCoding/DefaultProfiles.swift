@@ -36,11 +36,18 @@ enum DefaultProfiles {
         "down":  .init(hat: 4, action: "commandLeftBracket"),
         "left":  .init(hat: 6, action: "sessionPrev"),
     ]
-    /// 右摇杆默认当方向键用: 选菜单、挪光标
-    static let rightStick: [String: StickDir] = [
+    /// Version-8 right-stick preset retained so migration can recognize it.
+    static let rightStickV8: [String: StickDir] = [
         "up":    .init(hat: 0, action: "up"),
         "right": .init(hat: 2, action: "right"),
         "down":  .init(hat: 4, action: "down"),
+        "left":  .init(hat: 6, action: "left"),
+    ]
+    /// 右摇杆上下滚动；左右仍然移动光标或菜单选择。
+    static let rightStick: [String: StickDir] = [
+        "up":    .init(hat: 0, action: "scrollUp"),
+        "right": .init(hat: 2, action: "right"),
+        "down":  .init(hat: 4, action: "scrollDown"),
         "left":  .init(hat: 6, action: "left"),
     ]
     /// 左摇杆在 UI 中移动键盘焦点；按下 L3 激活当前焦点。
@@ -60,8 +67,8 @@ enum DefaultProfiles {
             2: "cancel",        // B
             3: "clearLine",     // X
             4: "delete",        // Y
-            5: "appCyclePrevious", // LB — Cmd+Shift+Tab direction
-            6: "appCycleNext",     // RB — Cmd+Tab direction
+            5: "raycastPreviousSpace", // LB — Raycast Switch to Previous Space
+            6: "raycastNextSpace",     // RB — Raycast Switch to Next Space
             7: "focusInput",    // View
             8: "raycastLauncher", // Menu
             9: "selectFocused", // left stick click — activate keyboard focus
@@ -74,7 +81,7 @@ enum DefaultProfiles {
         // Long presses preserve every existing tap while exposing common work apps directly.
         p.buttons["3"]?.long = "raycastEmojiPicker" // X tap still clears input
         p.buttons["5"]?.long = "raycastSlack"
-        p.buttons["6"] = ButtonBinding(tap: "appCycleNext", long: "raycastWarp")
+        p.buttons["6"] = ButtonBinding(tap: "raycastNextSpace", long: "raycastWarp")
         p.buttons["7"]?.long = "raycastClipboardHistory"
         p.buttons["8"]?.long = "raycastAIChat"
         p.buttons["9"]?.long = "raycastCodex"
@@ -86,12 +93,10 @@ enum DefaultProfiles {
         ]
         p.overrides = [
             BundleID.chrome: AppOverride(buttons: [
-                "3": ButtonBinding(tap: "reload", long: "raycastEmojiPicker"),
                 "4": ButtonBinding(tap: "navBack"),
                 "7": ButtonBinding(tap: "closeTab", long: "raycastClipboardHistory"),
             ]),
             BundleID.arc: AppOverride(buttons: [
-                "3": ButtonBinding(tap: "arcReload", long: "raycastEmojiPicker"),
                 "4": ButtonBinding(tap: "arcNavBack"),
                 "7": ButtonBinding(tap: "arcCloseTab", long: "raycastClipboardHistory"),
             ]),

@@ -123,18 +123,18 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertEqual(profile.buttons["1"]?.tap, "confirm")
         XCTAssertEqual(profile.buttons[String(XboxHID.leftTriggerButton)]?.tap, "ptt")
         XCTAssertEqual(profile.buttons[String(XboxHID.rightTriggerButton)]?.tap, "switchApp")
-        XCTAssertEqual(profile.buttons["5"]?.tap, "appCyclePrevious")
+        XCTAssertEqual(profile.buttons["5"]?.tap, "raycastPreviousSpace")
         XCTAssertEqual(profile.buttons["3"]?.long, "raycastEmojiPicker")
         XCTAssertEqual(profile.buttons["5"]?.long, "raycastSlack")
-        XCTAssertEqual(profile.buttons["6"], ButtonBinding(tap: "appCycleNext", long: "raycastWarp"))
+        XCTAssertEqual(profile.buttons["6"],
+                       ButtonBinding(tap: "raycastNextSpace", long: "raycastWarp"))
         XCTAssertEqual(profile.buttons["7"]?.long, "raycastClipboardHistory")
         XCTAssertEqual(profile.buttons["8"], ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
         XCTAssertEqual(profile.buttons["9"]?.tap, "selectFocused")
         XCTAssertEqual(profile.buttons["9"]?.long, "raycastCodex")
         XCTAssertEqual(profile.buttons["10"]?.long, "raycastAmp")
         XCTAssertNil(profile.buttons["12"])
-        XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.tap, "arcReload")
-        XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["3"]?.long, "raycastEmojiPicker")
+        XCTAssertNil(profile.overrides[BundleID.arc]?.buttons["3"])
         XCTAssertEqual(profile.overrides[BundleID.arc]?.buttons["7"]?.long, "raycastClipboardHistory")
         XCTAssertEqual(profile.overrides[BundleID.amp]?.buttons["8"],
                        ButtonBinding(tap: "ampNewSession", long: "raycastAIChat"))
@@ -157,7 +157,10 @@ final class HIDNormalizationTests: XCTestCase {
                        StickDir(hat: 0, action: "focusPrevious"))
         XCTAssertEqual(profile.sticks["left"]?["right"],
                        StickDir(hat: 2, action: "focusNext"))
-        XCTAssertEqual(profile.sticks["right"]?["up"], StickDir(hat: 0, action: "up"))
+        XCTAssertEqual(profile.sticks["right"]?["up"],
+                       StickDir(hat: 0, action: "scrollUp"))
+        XCTAssertEqual(profile.sticks["right"]?["down"],
+                       StickDir(hat: 4, action: "scrollDown"))
     }
 
     func testRightShiftReturnKeepsSidedModifierIdentity() {
@@ -178,6 +181,12 @@ final class HIDNormalizationTests: XCTestCase {
             KeySynth.ShortcutEvent(kind: .keyUp, keyCode: 36, flags: rightShift),
             KeySynth.ShortcutEvent(kind: .flagsChanged, keyCode: 60, flags: []),
         ])
+    }
+
+    func testClearLineUsesTextFieldFallbackAndKeepsTerminalOverride() {
+        XCTAssertEqual(AppProfiles.clearLineKey(app: BundleID.codex), KeySpec("cmd+a"))
+        XCTAssertEqual(AppProfiles.clearLineKey(app: BundleID.amp), KeySpec("cmd+a"))
+        XCTAssertEqual(AppProfiles.clearLineKey(app: BundleID.ghostty), KeySpec("ctrl+u"))
     }
 
     func testRaycastSnapshotParsesExactGlobalHotkeys() throws {
@@ -205,6 +214,18 @@ final class HIDNormalizationTests: XCTestCase {
         ])
     }
 
+    func testRaycastSnapshotParsesLayoutDependentArrowShortcuts() throws {
+        let json = #"""
+        {"tables":{"commands":[{"id":"c:r:window-management::-::switchToPreviousSpace","enabled":true,"macosHotkey":{"kind":{"type":"SingleStep","shortcut":{"modifiers":[{"modifier":"Ctrl"}],"key":{"type":"LayoutDependent","keyType":{"type":"Control","key":"ArrowLeft"}}}}}},{"id":"c:r:window-management::-::switchToNextSpace","enabled":true,"macosHotkey":{"kind":{"type":"SingleStep","shortcut":{"modifiers":[{"modifier":"Ctrl"}],"key":{"type":"LayoutDependent","keyType":{"type":"Control","key":"ArrowRight"}}}}}}]}}
+        """#
+        let shortcuts = RaycastShortcuts.parseSnapshot(
+            try XCTUnwrap(json.data(using: .utf8)))
+        XCTAssertEqual(shortcuts["raycastPreviousSpace"],
+                       RaycastShortcut(modifiers: ["ctrl"], keyCode: 123))
+        XCTAssertEqual(shortcuts["raycastNextSpace"],
+                       RaycastShortcut(modifiers: ["ctrl"], keyCode: 124))
+    }
+
     func testExistingXboxProfileMigratesOnceWithoutOverwritingCustomBindings() {
         var config = Config()
         config.xboxRaycastPresetVersion = 0
@@ -220,11 +241,11 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
-        XCTAssertEqual(config.devices[0].buttons["5"]?.tap, "appCyclePrevious")
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
+        XCTAssertEqual(config.devices[0].buttons["5"]?.tap, "raycastPreviousSpace")
         XCTAssertEqual(config.devices[0].buttons["5"]?.long, "raycastSlack")
         XCTAssertEqual(config.devices[0].buttons["6"],
-                       ButtonBinding(tap: "appCycleNext", long: "raycastWarp"))
+                       ButtonBinding(tap: "raycastNextSpace", long: "raycastWarp"))
         XCTAssertEqual(config.devices[0].buttons["8"],
                        ButtonBinding(tap: "raycastLauncher", long: "raycastAIChat"))
         XCTAssertEqual(config.devices[0].buttons["12"]?.tap, "customWeChat")
@@ -251,7 +272,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].sticks["hat"], customHat)
         XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.leftStickSelection)
         XCTAssertEqual(config.devices[0].sticks["right"], DefaultProfiles.rightStick)
@@ -269,7 +290,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].buttons["5"],
                        ButtonBinding(tap: "customLB", long: "raycastSlack"))
         XCTAssertEqual(config.devices[0].buttons["6"],
@@ -293,7 +314,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].buttons["9"],
                        ButtonBinding(tap: "selectFocused", long: "raycastCodex"))
         XCTAssertEqual(config.devices[0].sticks["left"], DefaultProfiles.leftStickSelection)
@@ -324,7 +345,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].overrides[BundleID.amp]?.buttons["8"],
                        ButtonBinding(tap: "ampNewSession", long: "raycastAIChat"))
         XCTAssertEqual(config.devices[0].sticks["hat"], DefaultProfiles.dpad)
@@ -352,7 +373,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].sticks["hat"], DefaultProfiles.dpad)
         XCTAssertEqual(config.devices[0].overrides[BundleID.amp]?.sticks["hat"]?["up"],
                        "ampPreviousThread")
@@ -372,7 +393,7 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].overrides[BundleID.codex]?.sticks["hat"]?["up"],
                        "customCodexUp")
         XCTAssertEqual(config.devices[0].overrides[BundleID.codex]?.sticks["hat"]?["down"],
@@ -391,11 +412,61 @@ final class HIDNormalizationTests: XCTestCase {
 
         config.migrateXboxRaycastPresetIfNeeded()
 
-        XCTAssertEqual(config.xboxRaycastPresetVersion, 8)
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
         XCTAssertEqual(config.devices[0].overrides[BundleID.wechat]?.sticks["hat"]?["up"],
                        "customWeChatUp")
         XCTAssertEqual(config.devices[0].overrides[BundleID.wechat]?.sticks["hat"]?["down"],
                        "down")
+    }
+
+    func testRightStickScrollMigrationPreservesCustomMap() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 8
+
+        var shipped = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Elite Series 2")
+        shipped.sticks["right"] = DefaultProfiles.rightStickV8
+
+        var custom = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B13,
+                                   name: "Custom Xbox")
+        let customRight = ["up": StickDir(hat: 7, action: "customUp")]
+        custom.sticks["right"] = customRight
+        config.devices = [shipped, custom]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
+        XCTAssertEqual(config.devices[0].sticks["right"], DefaultProfiles.rightStick)
+        XCTAssertEqual(config.devices[1].sticks["right"], customRight)
+    }
+
+    func testBrowserClearInputMigrationPreservesCustomXOverride() {
+        var config = Config()
+        config.xboxRaycastPresetVersion = 10
+
+        var shipped = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B22,
+                                    name: "Xbox Elite Series 2")
+        shipped.overrides[BundleID.chrome] = AppOverride(buttons: [
+            "3": ButtonBinding(tap: "reload", long: "raycastEmojiPicker"),
+        ])
+        shipped.overrides[BundleID.arc] = AppOverride(buttons: [
+            "3": ButtonBinding(tap: "arcReload", long: "raycastEmojiPicker"),
+        ])
+
+        var custom = DeviceProfile(vendorID: XboxHID.vendorID, productID: 0x0B13,
+                                   name: "Custom Xbox")
+        custom.overrides[BundleID.arc] = AppOverride(buttons: [
+            "3": ButtonBinding(tap: "customX", long: "customHold"),
+        ])
+        config.devices = [shipped, custom]
+
+        config.migrateXboxRaycastPresetIfNeeded()
+
+        XCTAssertEqual(config.xboxRaycastPresetVersion, 11)
+        XCTAssertNil(config.devices[0].overrides[BundleID.chrome]?.buttons["3"])
+        XCTAssertNil(config.devices[0].overrides[BundleID.arc]?.buttons["3"])
+        XCTAssertEqual(config.devices[1].overrides[BundleID.arc]?.buttons["3"],
+                       ButtonBinding(tap: "customX", long: "customHold"))
     }
 
     func testCommandAppSwitcherChordKeepsAAsTapAndConsumesShoulders() {
@@ -404,11 +475,11 @@ final class HIDNormalizationTests: XCTestCase {
         XCTAssertEqual(chord.handle(button: 1, down: true, device: "xbox", isXbox: true),
                        .begin)
         XCTAssertEqual(chord.handle(button: 6, down: true, device: "xbox", isXbox: true),
-                       .next)
+                       .step(previous: false, beginCommand: true))
         XCTAssertEqual(chord.handle(button: 6, down: false, device: "xbox", isXbox: true),
                        .consume)
         XCTAssertEqual(chord.handle(button: 5, down: true, device: "xbox", isXbox: true),
-                       .previous)
+                       .step(previous: true, beginCommand: false))
         XCTAssertEqual(chord.handle(button: 5, down: false, device: "xbox", isXbox: true),
                        .consume)
         XCTAssertEqual(chord.handle(button: 1, down: false, device: "xbox", isXbox: true),
@@ -426,13 +497,15 @@ final class HIDNormalizationTests: XCTestCase {
         var chord = CommandAppSwitcherChord()
         XCTAssertEqual(chord.handle(button: 1, down: true, device: "xbox", isXbox: true),
                        .begin)
-        XCTAssertTrue(chord.cancel(suppressAUntilRelease: true))
+        XCTAssertFalse(chord.cancel(suppressAUntilRelease: true))
         XCTAssertEqual(chord.handle(button: 1, down: false, device: "xbox", isXbox: true),
                        .consume)
         XCTAssertFalse(chord.cancel(suppressAUntilRelease: true))
 
         XCTAssertEqual(chord.handle(button: 1, down: true, device: "xbox", isXbox: true),
                        .begin)
+        XCTAssertEqual(chord.handle(button: 6, down: true, device: "xbox", isXbox: true),
+                       .step(previous: false, beginCommand: true))
         XCTAssertTrue(chord.removeDevice("xbox"))
         XCTAssertNil(chord.deviceID)
     }
@@ -511,5 +584,9 @@ final class HIDNormalizationTests: XCTestCase {
                        RaycastShortcut(modifiers: ["alt"], keyCode: 7))
         XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastWarp"),
                        RaycastShortcut(modifiers: ["alt"], keyCode: 13))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastPreviousSpace"),
+                       RaycastShortcut(modifiers: ["ctrl"], keyCode: 123))
+        XCTAssertEqual(RaycastShortcuts.shortcut(for: "raycastNextSpace"),
+                       RaycastShortcut(modifiers: ["ctrl"], keyCode: 124))
     }
 }
