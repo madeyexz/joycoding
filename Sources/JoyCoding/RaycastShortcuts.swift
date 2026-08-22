@@ -65,6 +65,10 @@ enum RaycastShortcuts {
                    commandID: "c:r:applications::*::application::=::/Applications/Warp.app"),
         Definition(actionID: "raycastFinder", name: "Raycast · Finder",
                    commandID: "c:r:applications::*::application::=::/System/Library/CoreServices/Finder.app"),
+        Definition(actionID: "raycastPreviousSpace", name: "Raycast · Previous Space",
+                   commandID: "c:r:window-management::-::switchToPreviousSpace"),
+        Definition(actionID: "raycastNextSpace", name: "Raycast · Next Space",
+                   commandID: "c:r:window-management::-::switchToNextSpace"),
     ]
 
     private static let actionToCommand = Dictionary(uniqueKeysWithValues:
@@ -150,14 +154,29 @@ enum RaycastShortcuts {
               kind["type"] as? String == "SingleStep",
               let shortcut = kind["shortcut"] as? [String: Any],
               let key = shortcut["key"] as? [String: Any],
-              let number = key["code"] as? NSNumber
+              let keyCode = parseKeyCode(key)
         else { return nil }
 
         let modifiers = (shortcut["modifiers"] as? [[String: Any]] ?? []).compactMap {
             modifierName($0)
         }
         return RaycastShortcut(modifiers: modifiers,
-                               keyCode: CGKeyCode(number.uint16Value))
+                               keyCode: keyCode)
+    }
+
+    private static func parseKeyCode(_ key: [String: Any]) -> CGKeyCode? {
+        if let number = key["code"] as? NSNumber {
+            return CGKeyCode(number.uint16Value)
+        }
+        guard key["type"] as? String == "LayoutDependent",
+              let keyType = key["keyType"] as? [String: Any],
+              keyType["type"] as? String == "Control",
+              let name = keyType["key"] as? String
+        else { return nil }
+        return [
+            "ArrowLeft": CGKeyCode(123), "ArrowRight": CGKeyCode(124),
+            "ArrowDown": CGKeyCode(125), "ArrowUp": CGKeyCode(126),
+        ][name]
     }
 
     private static func modifierName(_ value: [String: Any]) -> String? {

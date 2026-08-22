@@ -30,6 +30,8 @@ enum Translations {
         // MARK: 动作名与说明
         "确认 / 发送": "Confirm / Send",
         "回车；菜单打开时是「选中」": "Return; selects an item when a menu is open",
+        "所有 app 都发送回车；菜单打开时是「选中」":
+            "Sends Return in every app; selects an item when a menu is open",
         "打断 / 取消": "Interrupt / Cancel",
         "Esc；菜单打开时是「关掉菜单」": "Esc; dismisses an open menu",
         "退格删除": "Backspace",
@@ -94,6 +96,7 @@ enum Translations {
         "像 ⌘Tab，一按就切换": "Like ⌘Tab; switches immediately",
         "像 ⌘⇧Tab，一按就切换": "Like ⌘⇧Tab; switches immediately",
         "按住 A：app 切换器": "Hold A: app switcher",
+        "按住 A：等待 LB / RB": "Hold A: waiting for LB / RB",
         "A + LB：上一个 app": "A + LB: previous app",
         "A + RB：下一个 app": "A + RB: next app",
         "A 长按超时：已释放 Command": "A hold timed out: Command released",

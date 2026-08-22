@@ -242,12 +242,12 @@ struct Config: Codable {
     var devices: [DeviceProfile] = []
     /// Versioned so an existing Elite profile gets each shipped Base-layer update
     /// once without repeatedly overwriting later user customization.
-    var xboxRaycastPresetVersion = 8
+    var xboxRaycastPresetVersion = 11
 
     mutating func migrateXboxRaycastPresetIfNeeded() {
-        guard xboxRaycastPresetVersion < 8 else { return }
+        guard xboxRaycastPresetVersion < 11 else { return }
         let oldVersion = xboxRaycastPresetVersion
-        defer { xboxRaycastPresetVersion = 8 }
+        defer { xboxRaycastPresetVersion = 11 }
         for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
             func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
                          from old: String?, to new: String) {
@@ -381,6 +381,38 @@ struct Config: Codable {
                 }
                 override.sticks[StickChannel.hat.rawValue] = hat
                 devices[index].overrides[BundleID.wechat] = override
+            }
+
+            if oldVersion < 9 {
+                // Update only the shipped right-stick mapping. A custom map is
+                // left untouched, including partially customized directions.
+                if devices[index].sticks[StickChannel.right.rawValue] ==
+                    DefaultProfiles.rightStickV8 {
+                    devices[index].sticks[StickChannel.right.rawValue] =
+                        DefaultProfiles.rightStick
+                }
+            }
+
+            if oldVersion < 10 {
+                // Plain shoulders follow Raycast's assigned Space-navigation
+                // shortcuts. Preserve the long gestures and custom taps.
+                replace("5", \.tap, from: "appCyclePrevious", to: "raycastPreviousSpace")
+                replace("6", \.tap, from: "appCycleNext", to: "raycastNextSpace")
+            }
+
+            if oldVersion < 11 {
+                // X is globally Clear Input. Remove only the shipped browser
+                // Reload overrides; custom browser gestures remain untouched.
+                for (app, shippedTap) in [
+                    (BundleID.chrome, "reload"), (BundleID.arc, "arcReload"),
+                ] {
+                    guard var override = devices[index].overrides[app],
+                          override.buttons["3"] == ButtonBinding(
+                            tap: shippedTap, long: "raycastEmojiPicker")
+                    else { continue }
+                    override.buttons.removeValue(forKey: "3")
+                    devices[index].overrides[app] = override
+                }
             }
         }
     }

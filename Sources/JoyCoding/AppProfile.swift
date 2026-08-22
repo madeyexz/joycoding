@@ -53,6 +53,12 @@ enum AppProfiles {
         return builtin[app]?[action]
     }
 
+    /// Clearing a normal text field is universally Cmd+A then Backspace. Apps
+    /// with a safer native command (terminals use Ctrl+U) override this default.
+    static func clearLineKey(app: String) -> KeySpec {
+        key("clearLine", app: app) ?? KeySpec("cmd+a")
+    }
+
     static func hasAny(_ app: String) -> Bool {
         builtin[app] != nil || ConfigStore.shared.config.appProfiles[app] != nil
     }

@@ -68,8 +68,8 @@ enum Actions {
     static let all: [ActionDef] = [
 
         // ── 通用 ──────────────────────────────────────────────
-        ActionDef("confirm", L("确认 / 发送"), L("回车；菜单打开时是「选中」")) {
-            if ctx.inTarget() { key([], "return") }
+        ActionDef("confirm", L("确认 / 发送"), L("所有 app 都发送回车；菜单打开时是「选中」")) {
+            key([], "return")
             MenuMode.exit()
         },
         ActionDef("cancel", L("打断 / 取消"), L("Esc；菜单打开时是「关掉菜单」")) {
@@ -81,8 +81,8 @@ enum Actions {
         },
         ActionDef("clearLine", L("清空当前输入"), L("终端是 Ctrl+U，输入框是全选再删")) {
             guard ctx.inTarget() else { return }
-            if let spec = AppProfiles.key("clearLine", app: ctx.frontBundle),
-               let (m, k) = spec.parsed {
+            let spec = AppProfiles.clearLineKey(app: ctx.frontBundle)
+            if let (m, k) = spec.parsed {
                 key(m, k)
                 // 全选之后还得删一下
                 if k == "a" && m.contains("cmd") {
