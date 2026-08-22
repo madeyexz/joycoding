@@ -15,14 +15,14 @@ enum RawInput: Equatable {
     case hat(Int?, StickChannel)
 }
 
-/// Xbox A acts as a momentary Command modifier for the shoulder buttons while
-/// remaining an ordinary Confirm tap when released without using the chord.
+/// Xbox A arms the shoulder-button app-switch chord while remaining an ordinary
+/// Confirm tap. Command is not synthesized until LB/RB actually arrives, so a
+/// standalone or double A press cannot look like a modifier tap to other apps.
 struct CommandAppSwitcherChord {
     enum Effect: Equatable {
         case none
         case begin
-        case next
-        case previous
+        case step(previous: Bool, beginCommand: Bool)
         case finish(tapA: Bool)
         case consume
     }
@@ -61,28 +61,31 @@ struct CommandAppSwitcherChord {
         guard down, deviceID == device, button == 5 || button == 6 else {
             return .none
         }
+        let beginCommand = !used
         used = true
         consumedShoulders.insert(key)
-        return button == 6 ? .next : .previous
+        return .step(previous: button == 5, beginCommand: beginCommand)
     }
 
     /// Returns true when the caller must synthesize Command-up.
     mutating func cancel(suppressAUntilRelease: Bool) -> Bool {
         guard let deviceID else { return false }
+        let commandWasHeld = used
         if suppressAUntilRelease { suppressedA.insert("\(deviceID)/1") }
         self.deviceID = nil
         used = false
-        return true
+        return commandWasHeld
     }
 
     /// Device removal has no matching button-up event, so discard its swallowed
     /// releases as well as releasing Command.
     mutating func removeDevice(_ device: String) -> Bool {
         let wasActive = deviceID == device
+        let commandWasHeld = wasActive && used
         if wasActive { deviceID = nil; used = false }
         consumedShoulders = consumedShoulders.filter { !$0.hasPrefix("\(device)/") }
         suppressedA = suppressedA.filter { !$0.hasPrefix("\(device)/") }
-        return wasActive
+        return commandWasHeld
     }
 }
 
@@ -502,24 +505,23 @@ final class HIDInput: ObservableObject {
         case .consume:
             return true
         case .begin:
-            if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: true) }
             armCommandChordFuse(device: device)
-            lastDispatch = L("按住 A：app 切换器")
+            lastDispatch = L("按住 A：等待 LB / RB")
             HIDProof.shared.record("commandChord", ["phase": "begin", "deviceID": device])
             return true
-        case .next, .previous:
+        case .step(let previous, let beginCommand):
             armCommandChordFuse(device: device)
-            let previous = effect == .previous
             let action = previous ? "commandShiftTab" : "commandTab"
             lastDispatch = previous ? L("A + LB：上一个 app") : L("A + RB：下一个 app")
             HIDProof.shared.record("action", ["action": action, "deviceID": device])
             if !HIDProof.shared.dryRun {
+                if beginCommand { KeySynth.modifierHold("cmd", down: true) }
                 KeySynth.keyStroke(previous ? ["cmd", "shift"] : ["cmd"], "tab")
             }
             return true
         case .finish(let tapA):
             commandChordFuse?.invalidate(); commandChordFuse = nil
-            if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: false) }
+            if !tapA, !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: false) }
             HIDProof.shared.record("commandChord", [
                 "phase": "finish", "deviceID": device, "tapA": tapA,
             ])
