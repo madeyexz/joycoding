@@ -39,7 +39,7 @@ struct ProfilesView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(AppProfiles.configurable, id: \.self) { id in
+                    ForEach(AppProfiles.configurableActions(for: app), id: \.self) { id in
                         row(id)
                         Divider()
                     }
@@ -65,13 +65,13 @@ struct ProfilesView: View {
     }
 
     private func row(_ id: String) -> some View {
-        let name = Actions.byID[id]?.name ?? id
+        let name = Actions.action(for: id)?.name ?? id
         let user = store.config.appProfiles[app]?[id]
         let spec = user ?? AppProfiles.builtin[app]?[id]
         let isRec = recording == id
         return HStack(spacing: 10) {
             Text(name).font(.body).frame(width: 190, alignment: .leading)
-            if let d = Actions.byID[id]?.detail, !d.isEmpty {
+            if let d = Actions.action(for: id)?.detail, !d.isEmpty {
                 Text(d).font(.callout).foregroundStyle(.tertiary)
                     .lineLimit(1).frame(maxWidth: 200, alignment: .leading)
             }

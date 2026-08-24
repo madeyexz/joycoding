@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AnchorShape { case circle, capsuleH, capsuleV }
-enum AnchorKind { case auto, button, stick, home, share, profile, touchpad, system }
+enum AnchorKind { case auto, button, stick, paddle, home, share, profile, touchpad, system }
 
 /// 摇杆四向的虚拟锚点 id。用负数, 和真实按键编号错开。
 enum StickAnchor {
@@ -234,6 +234,27 @@ struct DeviceArt {
             pos: .init(x: 0.500, y: 0.499),
             size: .init(width: 0.050, height: 0.076), shape: .circle,
             side: .left, kind: .profile))
+        // Rear controls are normally hidden from the front illustration. Their
+        // approximate grip positions light up on hover/press while the rows stay
+        // together in a dedicated mapping section.
+        anchors.append(contentsOf: [
+            .init(id: XboxHID.paddle1Button, label: "P1",
+                  pos: .init(x: 0.185, y: 0.600),
+                  size: .init(width: 0.035, height: 0.130), shape: .capsuleV,
+                  side: .left, kind: .paddle),
+            .init(id: XboxHID.paddle2Button, label: "P2",
+                  pos: .init(x: 0.815, y: 0.600),
+                  size: .init(width: 0.035, height: 0.130), shape: .capsuleV,
+                  side: .right, kind: .paddle),
+            .init(id: XboxHID.paddle3Button, label: "P3",
+                  pos: .init(x: 0.150, y: 0.740),
+                  size: .init(width: 0.035, height: 0.150), shape: .capsuleV,
+                  side: .left, kind: .paddle),
+            .init(id: XboxHID.paddle4Button, label: "P4",
+                  pos: .init(x: 0.850, y: 0.740),
+                  size: .init(width: 0.035, height: 0.150), shape: .capsuleV,
+                  side: .right, kind: .paddle),
+        ])
         return DeviceArt(anchors: anchors, aspect: xbox.aspect, railSide: nil,
                          style: .xboxElite2, hatLabel: xbox.hatLabel)
     }()
@@ -876,6 +897,14 @@ struct DeviceBody: View {
                     .fill(fillColor(14)).frame(width: bw, height: bh)
                 RoundedRectangle(cornerRadius: bh * 0.22)
                     .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    .frame(width: bw, height: bh)
+
+            case .paddle:     // 背面拨片: 细长金属片
+                Capsule()
+                    .fill(fillColor(a.id).opacity(hot ? 1 : 0.62))
+                    .frame(width: bw, height: bh)
+                Capsule()
+                    .stroke(Color.white.opacity(hot ? 0.72 : 0.18), lineWidth: 1)
                     .frame(width: bw, height: bh)
 
             case .button where a.shape != .circle:   // SL/SR、肩键、扳机: 胶囊形

@@ -29,6 +29,8 @@ struct MappingView: View {
     @State private var selectedID: String?
     @State private var hot: Int?              // 鼠标悬停高亮的按键
     @State private var hotCell: String?       // 悬停的那一格动作选择器
+    @State private var actionPickerCell: String?
+    @State private var recentlyChangedCell: String?
     @State private var hotLayer: String?
     @State private var pressed: Int?          // 手柄上真按下的键, 实时点亮
     @State private var learningStick = false
@@ -127,6 +129,7 @@ struct MappingView: View {
         .onChange(of: hid.devices.map(\.id)) { _ in
             if selectedID == nil { selectedID = hid.devices.first?.id }
         }
+        .onChange(of: layer) { _ in actionPickerCell = nil }
     }
 
     @ViewBuilder
@@ -363,7 +366,7 @@ struct MappingView: View {
             return (profile?.sticks[ch.rawValue]?.isEmpty ?? true) ? L("未学习") : ch.label
         }
         guard let id = profile?.binding(button: a.id, app: layer)?.tap,
-              let name = Actions.byID[id]?.name else { return L("未设置") }
+              let name = Actions.action(for: id)?.name else { return L("未设置") }
         return name
     }
 
@@ -550,13 +553,16 @@ struct MappingView: View {
         return rowShell(live: pressed == a.id, hovered: hot == a.id) {
             HStack(spacing: MapMetrics.colGap) {
                 labelCell(a, bound: !b.isEmpty)
-                actionCell("\(a.id).tap", b.tap, dimmed: inherited) {
+                actionCell("\(a.id).tap", b.tap, dimmed: inherited,
+                           target: "\(a.label) · \(L("单击"))") {
                     set(d, a.id, \.tap, $0)
                 }
-                actionCell("\(a.id).double", b.double, dimmed: inherited) {
+                actionCell("\(a.id).double", b.double, dimmed: inherited,
+                           target: "\(a.label) · \(L("双击"))") {
                     set(d, a.id, \.double, $0)
                 }
-                actionCell("\(a.id).long", b.long, dimmed: inherited) {
+                actionCell("\(a.id).long", b.long, dimmed: inherited,
+                           target: "\(a.label) · \(L("长按"))") {
                     set(d, a.id, \.long, $0)
                 }
                 if !layer.isEmpty {
@@ -604,6 +610,7 @@ struct MappingView: View {
                 dirLabelCell(dir, live: live, bound: act != nil)
                 actionCell("\(ch.rawValue).\(dir)", act,
                            dimmed: !layer.isEmpty && !overridden,
+                           target: "\(chLabel(ch)) · \(DeviceProfile.dirLabel[dir] ?? dir)",
                            unset: learned ? "—" : L("未学习"),
                            menuHint: learned ? nil : L("先点右上角学习「%@」", chLabel(ch))) {
                     setDir(d, ch, dir, $0)
@@ -692,12 +699,15 @@ struct MappingView: View {
     /// 一格动作。静止时只有文字, 悬停才出底色和箭头 —— 二十来行 × 三列的
     /// 输入框边框比内容还抢眼, 所以边框只在鼠标下出现。
     private func actionCell(_ key: String, _ current: String?, dimmed: Bool,
-                            unset: String = "—", menuHint: String? = nil,
+                            target: String, unset: String = "—", menuHint: String? = nil,
                             pick: @escaping (String?) -> Void) -> some View {
-        let name = current.flatMap { Actions.byID[$0]?.name }
+        let name = current.flatMap { Actions.action(for: $0)?.name }
         let hovered = hotCell == key
-        return Menu {
-            if let menuHint { Text(menuHint) } else { actionMenuItems(pick) }
+        let open = actionPickerCell == key
+        let changed = recentlyChangedCell == key
+        return Button {
+            guard menuHint == nil else { return }
+            actionPickerCell = open ? nil : key
         } label: {
             HStack(spacing: 4) {
                 Text(name ?? unset)
@@ -706,23 +716,37 @@ struct MappingView: View {
                                                  : (dimmed ? Color.secondary : Color.primary))
                     .lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .black))
-                    .foregroundStyle(.tertiary)
-                    .opacity(hovered ? 1 : 0)
+                Image(systemName: changed ? "checkmark.circle.fill" : "chevron.up.chevron.down")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(changed ? Color.accentColor : Color.secondary)
+                    .opacity((hovered || open || changed) ? 1 : 0.32)
             }
             .padding(.horizontal, MapMetrics.cellInset).padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(hovered ? Color.primary.opacity(0.07) : Color.clear))
+                .fill(changed ? Color.accentColor.opacity(0.10)
+                              : ((hovered || open) ? Color.primary.opacity(0.07) : Color.clear)))
             .contentShape(Rectangle())
         }
-        // .borderlessButton 会在标签左边硬画一个自己的指示符, menuIndicator
-        // 管不住它 —— 二十来行 × 三列全是那个小菱形, 比动作名还抢眼。
-        // .button + .plain 才是真正交给我们自己画的组合。
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .disabled(menuHint != nil)
+        .help(menuHint ?? L("选择动作"))
+        .accessibilityLabel(L("设置 %@", target))
+        .popover(isPresented: Binding(
+            get: { actionPickerCell == key },
+            set: { if !$0 && actionPickerCell == key { actionPickerCell = nil } }
+        ), arrowEdge: .trailing) {
+            ActionPicker(current: current, layer: layer, target: target) { value in
+                pick(value)
+                actionPickerCell = nil
+                withAnimation(.easeOut(duration: 0.16)) { recentlyChangedCell = key }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        if recentlyChangedCell == key { recentlyChangedCell = nil }
+                    }
+                }
+            }
+        }
         .onHover { hotCell = $0 ? key : (hotCell == key ? nil : hotCell) }
     }
 
@@ -755,8 +779,9 @@ struct MappingView: View {
         let anchors: [ButtonAnchor]
     }
 
-    /// 0 肩键与扳机 / 1 面键 / 2 功能键 / 3 摇杆与十字键
+    /// 0 肩键与扳机 / 1 面键 / 2 功能键 / 3 摇杆与十字键 / 4 背部拨片
     private func groupOf(_ a: ButtonAnchor, style: BodyStyle) -> Int {
+        if a.kind == .paddle { return 4 }
         if StickChannel.from(anchorID: a.id) != nil { return 3 }
         if a.kind == .stick { return 3 }
         let isXbox = style == .xbox || style == .xboxElite2
@@ -786,8 +811,9 @@ struct MappingView: View {
 
     private func sections(_ d: ConnectedDevice, _ art: DeviceArt) -> [CardSection] {
         let style = art.style
-        let titles = [L("肩键与扳机"), L("面键"), L("功能键"), L("摇杆与十字键")]
-        return (0...3).compactMap { g in
+        let titles = [L("肩键与扳机"), L("面键"), L("功能键"), L("摇杆与十字键"),
+                      L("背部拨片")]
+        return (0...4).compactMap { g in
             let items = art.anchors
                 .filter { groupOf($0, style: style) == g }
                 .sorted { gridRank($0) < gridRank($1) }
@@ -870,65 +896,6 @@ struct MappingView: View {
     }
 
     // MARK: - 配置读写
-
-    /// 当前层的菜单该怎么分组。
-    /// 整组都用不了的收进「其它 app 专属」, 不占顶层位置 ——
-    /// 在 Claude Code 层顶着一个「Chrome」组是纯噪音。
-    /// 基础层不做收拢: 基础层对所有 app 生效, 绑个 app 专属动作是合理的。
-    private var groupSplit: (primary: [String], other: [String]) {
-        let all = Actions.groups
-        guard !layer.isEmpty else { return (all, []) }
-        var primary: [String] = [], other: [String] = []
-        for g in all {
-            if Actions.all.filter({ $0.group == g }).contains(where: available) {
-                primary.append(g)
-            } else {
-                other.append(g)
-            }
-        }
-        // 当前 app 自己的组排最前, 最常用的放最近
-        let own = primary.filter { g in
-            Actions.all.first { $0.group == g }?.onlyIn == layer
-        }
-        return (own + primary.filter { !own.contains($0) }, other)
-    }
-
-    @ViewBuilder
-    private func actionMenuItems(_ pick: @escaping (String?) -> Void) -> some View {
-        let split = groupSplit
-        Button(L("未设置")) { pick(nil) }
-        ForEach(split.primary, id: \.self) { g in
-            Menu(g) {
-                ForEach(Actions.all.filter { $0.group == g }) { act in
-                    Button(actionLabel(act)) { pick(act.id) }
-                        .disabled(!available(act))
-                }
-            }
-        }
-        if !split.other.isEmpty {
-            Menu(L("其它 app 专属（本层无效）")) {
-                ForEach(split.other, id: \.self) { g in
-                    Menu(g) {
-                        ForEach(Actions.all.filter { $0.group == g }) { act in
-                            Button(act.name) { }.disabled(true)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// 动作在当前层是否有效。无效的不隐藏, 只置灰并标注 ——
-    /// 隐藏会让人以为功能没了。
-    private func available(_ a: ActionDef) -> Bool {
-        guard let only = a.onlyIn else { return true }
-        return layer.isEmpty || layer == only
-    }
-
-    private func actionLabel(_ a: ActionDef) -> String {
-        guard let only = a.onlyIn, !available(a) else { return a.name }
-        return L("%@（仅 %@）", a.name, AppName.of(only))
-    }
 
     private func clearOverride(_ d: ConnectedDevice, _ n: Int) {
         mutate(d) { p in

@@ -167,8 +167,8 @@ struct OverviewView: View {
     /// 后者会让人以为它能用。
     private func unsupported(_ action: String?, app: String?) -> Bool {
         guard let action, let app,
-              AppProfiles.configurable.contains(action) else { return false }
-        guard let spec = AppProfiles.key(action, app: app) else { return true }
+              AppProfiles.isConfigurable(action) else { return false }
+        guard let spec = AppProfiles.key(Actions.canonicalID(action), app: app) else { return true }
         return spec.raw.isEmpty
     }
 
@@ -182,7 +182,7 @@ struct OverviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func name(_ id: String) -> String { Actions.byID[id]?.name ?? id }
+    private func name(_ id: String) -> String { Actions.action(for: id)?.name ?? id }
 
     /// 导出成 Markdown 表格, 贴到笔记或者发给别人
     private func markdown() -> String {
