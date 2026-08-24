@@ -15,9 +15,19 @@ enum XboxHID {
     static let rightTriggerUsage = 0xC4   // Accelerator
     static let leftTriggerUsage = 0xC5    // Brake
 
+    // With the Elite 2's onboard profile disabled, its four rear paddles arrive
+    // together as a bit mask on Consumer page usage 0x81. Keep the bit order
+    // learned from the physical controller here at the HID boundary.
+    static let consumerPage = 0x0C
+    static let paddleUsage = 0x81
+
     // Virtual button IDs live outside the controller's physical Button-page range.
     static let leftTriggerButton = 20
     static let rightTriggerButton = 21
+    static let paddle1Button = 13   // upper-left
+    static let paddle2Button = 14   // upper-right
+    static let paddle3Button = 15   // lower-left
+    static let paddle4Button = 16   // lower-right
 
     /// JoyCoding stores the conventional Xbox numbering (1=A, 2=B, 3=X, ...),
     /// but the Elite Series 2 BLE descriptor deliberately leaves holes for the
@@ -77,6 +87,23 @@ enum XboxHID {
         case rightTriggerUsage: return rightTriggerButton
         default: return nil
         }
+    }
+
+    /// Return nil for an unrelated element and a (possibly empty) set for the
+    /// Elite paddle report. Multiple paddles may be held at the same time.
+    static func paddleButtons(vendor: Int, product: Int, usagePage: Int,
+                              usage: Int, mask: Int) -> Set<Int>? {
+        guard vendor == vendorID, product == elite2ProductID,
+              usagePage == consumerPage, usage == paddleUsage else { return nil }
+        let bitToButton = [
+            2: paddle1Button,
+            0: paddle2Button,
+            3: paddle3Button,
+            1: paddle4Button,
+        ]
+        return Set(bitToButton.compactMap { bit, button in
+            mask & (1 << bit) != 0 ? button : nil
+        })
     }
 }
 

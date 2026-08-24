@@ -1,5 +1,53 @@
 import Foundation
 
+/// How an action is delivered. Keeping delivery separate from menu metadata
+/// means controller mappings can stay stable while shortcut providers evolve.
+enum ActionInvocation {
+    case appShortcut(String)
+    case raycast(String)
+    case focusApp(String)
+    case handler(() -> Void)
+}
+
+enum ActionProvider: Equatable {
+    case local
+    case appProfile
+    case raycast
+    case appFocus
+}
+
+enum ActionExecutor {
+    private static let ctx = AppContext.shared
+
+    static func execute(_ invocation: ActionInvocation) {
+        switch invocation {
+        case .appShortcut(let action):
+            guard let spec = AppProfiles.key(action, app: ctx.frontBundle) else {
+                NSLog("[JoyCoding] No shortcut for \(action) in \(ctx.frontBundle)")
+                return
+            }
+            execute(spec)
+        case .raycast(let action):
+            RaycastShortcuts.trigger(action)
+        case .focusApp(let bundleID):
+            ctx.focus(bundleID)
+        case .handler(let handler):
+            handler()
+        }
+    }
+
+    private static func execute(_ spec: KeySpec) {
+        if spec.isText {
+            KeySynth.type(spec.text)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                KeySynth.keyStroke([], "return")
+            }
+        } else if let (modifiers, key) = spec.parsed {
+            KeySynth.keyStroke(modifiers, key)
+        }
+    }
+}
+
 struct ActionDef: Identifiable {
     let id: String
     let name: String
@@ -7,17 +55,46 @@ struct ActionDef: Identifiable {
     let group: String
     /// 按住是否连发 (退格、方向、翻页这类)
     let repeatable: Bool
-    /// 只在这个 app 里有效。界面在别的层里会把它置灰并标注,
-    /// 而不是直接隐藏 —— 隐藏会让人以为功能没了。
-    let onlyIn: String?
-    let run: () -> Void
+    /// nil means global. A set allows one semantic action to be shared by
+    /// several apps without duplicating action IDs or execution closures.
+    let supportedApps: Set<String>?
+    let invocation: ActionInvocation
+
+    var onlyIn: String? {
+        guard supportedApps?.count == 1 else { return nil }
+        return supportedApps?.first
+    }
+
+    var provider: ActionProvider {
+        switch invocation {
+        case .appShortcut: return .appProfile
+        case .raycast: return .raycast
+        case .focusApp: return .appFocus
+        case .handler: return .local
+        }
+    }
 
     init(_ id: String, _ name: String, _ detail: String = "",
          group: String? = nil, repeatable: Bool = false,
          onlyIn: String? = nil, run: @escaping () -> Void) {
         self.id = id; self.name = name; self.detail = detail
         self.group = group ?? L("通用"); self.repeatable = repeatable
-        self.onlyIn = onlyIn; self.run = run
+        self.supportedApps = onlyIn.map { [$0] }
+        self.invocation = .handler(run)
+    }
+
+    init(_ id: String, _ name: String, _ detail: String = "",
+         group: String? = nil, repeatable: Bool = false,
+         supportedIn: Set<String>? = nil, invocation: ActionInvocation) {
+        self.id = id; self.name = name; self.detail = detail
+        self.group = group ?? L("通用"); self.repeatable = repeatable
+        self.supportedApps = supportedIn
+        self.invocation = invocation
+    }
+
+    func isAvailable(in app: String) -> Bool {
+        guard let supportedApps else { return true }
+        return supportedApps.contains(app) || AppProfiles.hasShortcut(id, app: app)
     }
 }
 
@@ -49,17 +126,38 @@ enum Actions {
     static let ctx = AppContext.shared
     private static func key(_ m: [String], _ k: String) { KeySynth.keyStroke(m, k) }
 
-    /// 按当前前台 app 查档案表并发出去。
-    /// 这是「语义动作 → 具体快捷键」的唯一出口 —— 以前这层散落在 21 处
-    /// if inClaude / inGhostty 里, 加个 app 就得改代码。
-    private static func send(_ action: String) {
-        let app = ctx.frontBundle
-        guard let spec = AppProfiles.key(action, app: app) else { return }
-        if spec.isText {
-            KeySynth.type(spec.text)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { key([], "return") }
-        } else if let (mods, k) = spec.parsed {
-            key(mods, k)
+    struct AppFocusTarget: Equatable {
+        let actionID: String
+        let labelKey: String
+        let bundleID: String
+    }
+
+    /// Direct-switch actions ordered by the user's current high-frequency work
+    /// surfaces, followed by useful installed fallbacks. This is deliberately a
+    /// plain catalog rather than a dependency on Computer History at runtime.
+    static let appFocusTargets: [AppFocusTarget] = [
+        .init(actionID: "focusArc", labelKey: "切到 Arc", bundleID: BundleID.arc),
+        .init(actionID: "focusSlack", labelKey: "切到 Slack", bundleID: BundleID.slack),
+        .init(actionID: "focusRaycast", labelKey: "切到 Raycast", bundleID: BundleID.raycast),
+        .init(actionID: "focusEnergy", labelKey: "切到 Energy", bundleID: BundleID.energy),
+        .init(actionID: "focusCodex", labelKey: "切到 Codex", bundleID: BundleID.codex),
+        .init(actionID: "focusWeChat", labelKey: "切到微信", bundleID: BundleID.wechat),
+        .init(actionID: "focusAmp", labelKey: "切到 ampcode", bundleID: BundleID.amp),
+        .init(actionID: "focusMail", labelKey: "切到 Mail", bundleID: BundleID.mail),
+        .init(actionID: "focusSignal", labelKey: "切到 Signal", bundleID: BundleID.signal),
+        .init(actionID: "focusWhatsApp", labelKey: "切到 WhatsApp", bundleID: BundleID.whatsapp),
+        .init(actionID: "focusHeptabase", labelKey: "切到 Heptabase",
+              bundleID: BundleID.heptabase),
+        .init(actionID: "focusWarp", labelKey: "切到 Warp", bundleID: BundleID.warp),
+        .init(actionID: "focusGhostty", labelKey: "切到 Ghostty", bundleID: BundleID.ghostty),
+        .init(actionID: "focusChrome", labelKey: "切到 Chrome", bundleID: BundleID.chrome),
+        .init(actionID: "focusClaude", labelKey: "切到 Claude Code", bundleID: BundleID.claude),
+    ]
+
+    private static var appFocusActions: [ActionDef] {
+        appFocusTargets.map { target in
+            ActionDef(target.actionID, L(target.labelKey), group: L("切换 app"),
+                      invocation: .focusApp(target.bundleID))
         }
     }
 
@@ -122,6 +220,12 @@ enum Actions {
         },
         ActionDef("ptt", L("语音输入"), L("按住录, 松开出字")) { /* 按下/松开另行处理 */ },
         ActionDef("focusInput", L("聚焦输入框"), L("点一下底部输入区")) {
+            // Prefer a recorded/native app shortcut. The click fallback exists
+            // only for apps such as Claude and WeChat that expose none.
+            if AppProfiles.hasShortcut("focusInput", app: ctx.frontBundle) {
+                ActionExecutor.execute(.appShortcut("focusInput"))
+                return
+            }
             // Claude Code / 微信都没有聚焦输入框的快捷键(文档和菜单都查过),
             // Web 界面也不暴露无障碍元素。只能按窗口比例点 —— 聊天界面的
             // 输入框总在底部, 这个位置很稳。
@@ -138,105 +242,79 @@ enum Actions {
 
         // ── 会话 / 标签 ────────────────────────────────────────
         ActionDef("sessionPrev", L("上一个会话"), L("Session / 聊天 / 标签 / 窗口，看 app"),
-                  group: L("会话"), repeatable: true) { send("sessionPrev") },
+                  group: L("会话"), repeatable: true,
+                  invocation: .appShortcut("sessionPrev")),
         ActionDef("sessionNext", L("下一个会话"), L("Session / 聊天 / 标签 / 窗口，看 app"),
-                  group: L("会话"), repeatable: true) { send("sessionNext") },
+                  group: L("会话"), repeatable: true,
+                  invocation: .appShortcut("sessionNext")),
+        ActionDef("contextPrevious", L("上一个上下文"),
+                  L("侧边栏线程 / 浏览器项目 / 输入历史，看 app"),
+                  group: L("会话"), repeatable: true,
+                  supportedIn: [BundleID.amp, BundleID.codex, BundleID.arc,
+                                BundleID.wechat, BundleID.warp],
+                  invocation: .appShortcut("contextPrevious")),
+        ActionDef("contextNext", L("下一个上下文"),
+                  L("侧边栏线程 / 浏览器项目 / 输入历史，看 app"),
+                  group: L("会话"), repeatable: true,
+                  supportedIn: [BundleID.amp, BundleID.codex, BundleID.arc,
+                                BundleID.wechat, BundleID.warp],
+                  invocation: .appShortcut("contextNext")),
         ActionDef("wechatNextUnread", L("下一个未读会话"), L("微信 · Cmd+Opt+↓"),
-                  group: L("会话"), onlyIn: BundleID.wechat) {
-            send("wechatNextUnread")
-        },
-        ActionDef("windowNext", L("下一个窗口"), L("同一个 app 的窗口间切换"), group: L("会话")) {
-            send("windowNext")
-        },
+                  group: L("会话"), supportedIn: [BundleID.wechat],
+                  invocation: .appShortcut("wechatNextUnread")),
+        ActionDef("windowNext", L("下一个窗口"), L("同一个 app 的窗口间切换"),
+                  group: L("会话"), invocation: .appShortcut("windowNext")),
 
-        // ── Claude Code ───────────────────────────────────────
-        ActionDef("newSession", L("新建 Session"), "Cmd+N", group: "Claude Code", onlyIn: BundleID.claude) {
-            send("newSession")
-        },
-        ActionDef("ampNewSession", L("Amp 新建会话"), "Cmd+N", group: "ampcode",
-                  onlyIn: BundleID.amp) {
-            send("newSession")
-        },
-        ActionDef("ampPreviousThread", L("Amp 上一个侧边栏线程"), "Ctrl+Option+↑",
-                  group: "ampcode", repeatable: true, onlyIn: BundleID.amp) {
-            key(["ctrl", "alt"], "up")
-        },
-        ActionDef("ampNextThread", L("Amp 下一个侧边栏线程"), "Ctrl+Option+↓",
-                  group: "ampcode", repeatable: true, onlyIn: BundleID.amp) {
-            key(["ctrl", "alt"], "down")
-        },
-        ActionDef("codexPreviousThread", L("Codex 上一个线程"), "Option+Cmd+↑",
-                  group: "Codex", repeatable: true, onlyIn: BundleID.codex) {
-            key(["alt", "cmd"], "up")
-        },
-        ActionDef("codexNextThread", L("Codex 下一个线程"), "Option+Cmd+↓",
-                  group: "Codex", repeatable: true, onlyIn: BundleID.codex) {
-            key(["alt", "cmd"], "down")
-        },
-        ActionDef("modelMenu", L("切换模型"), L("Claude 开菜单 / Codex 打 /model"), group: "Claude Code") {
-            send("modelMenu")
-        },
-        ActionDef("effortMenu", L("切换 effort"), "Cmd+Shift+E", group: "Claude Code", onlyIn: BundleID.claude) {
-            send("effortMenu")
-        },
-        ActionDef("mode", L("切权限模式"), "Codex:Shift+Tab / Claude:Cmd+Shift+M", group: "Claude Code") {
-            send("mode")
-        },
-        ActionDef("diffPane", L("切换 diff 面板"), L("看改了什么"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("diffPane")
-        },
-        ActionDef("terminalPane", L("切换终端面板"), L("内置 shell"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("terminalPane")
-        },
-        ActionDef("browserPane", L("切换 Browser 面板"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("browserPane")
-        },
-        ActionDef("sideChat", L("打开 side chat"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("sideChat")
-        },
-        ActionDef("closePane", L("关闭当前分栏"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("closePane")
-        },
-        ActionDef("viewMode", L("循环视图模式"), L("控制正文详细程度"), group: "Claude Code", onlyIn: BundleID.claude) {
-            send("viewMode")
-        },
+        // ── App-profile shortcuts ─────────────────────────────
+        ActionDef("newSession", L("新建会话"), L("每个 app 使用自己的快捷键"),
+                  group: L("会话"),
+                  supportedIn: [BundleID.claude, BundleID.wechat, BundleID.amp,
+                                BundleID.energy, "com.openai.chat",
+                                "com.todesktop.230313mzl4w4u92", "com.microsoft.VSCode"],
+                  invocation: .appShortcut("newSession")),
+        ActionDef("modelMenu", L("切换模型"), L("Claude 开菜单 / Codex 打 /model"),
+                  group: "Claude Code", supportedIn: [BundleID.claude, BundleID.ghostty],
+                  invocation: .appShortcut("modelMenu")),
+        ActionDef("effortMenu", L("切换 effort"), "Cmd+Shift+E", group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("effortMenu")),
+        ActionDef("mode", L("切权限模式"), "Codex:Shift+Tab / Claude:Cmd+Shift+M",
+                  group: "Claude Code", supportedIn: [BundleID.claude, BundleID.ghostty],
+                  invocation: .appShortcut("mode")),
+        ActionDef("diffPane", L("切换 diff 面板"), L("看改了什么"), group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("diffPane")),
+        ActionDef("terminalPane", L("切换终端面板"), L("内置 shell"), group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("terminalPane")),
+        ActionDef("browserPane", L("切换 Browser 面板"), group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("browserPane")),
+        ActionDef("sideChat", L("打开 side chat"), group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("sideChat")),
+        ActionDef("closePane", L("关闭当前分栏"), group: "Claude Code",
+                  supportedIn: [BundleID.claude], invocation: .appShortcut("closePane")),
+        ActionDef("viewMode", L("循环视图模式"), L("控制正文详细程度"),
+                  group: "Claude Code", supportedIn: [BundleID.claude],
+                  invocation: .appShortcut("viewMode")),
 
         // ── 终端 ──────────────────────────────────────────────
-        ActionDef("interrupt", "Ctrl+C", L("⚠️ Codex 里这是退出 CLI, 打断请用 Esc"), group: L("终端"), onlyIn: BundleID.ghostty) {
-            send("interrupt")
-        },
+        ActionDef("interrupt", "Ctrl+C", L("⚠️ Codex 里这是退出 CLI, 打断请用 Esc"),
+                  group: L("终端"), supportedIn: [BundleID.ghostty],
+                  invocation: .appShortcut("interrupt")),
 
-        // ── Chrome ────────────────────────────────────────────
-        ActionDef("navBack", L("后退"), "Cmd+[", group: "Chrome", repeatable: true, onlyIn: BundleID.chrome) {
-            send("navBack")
-        },
-        ActionDef("navForward", L("前进"), "Cmd+]", group: "Chrome", repeatable: true, onlyIn: BundleID.chrome) {
-            send("navForward")
-        },
-        ActionDef("reload", L("刷新页面"), "Cmd+R", group: "Chrome", onlyIn: BundleID.chrome) {
-            send("reload")
-        },
-        ActionDef("newTab", L("新建标签"), "Cmd+T", group: "Chrome", onlyIn: BundleID.chrome) {
-            send("newTab")
-        },
+        // ── Browsers ──────────────────────────────────────────
+        ActionDef("navBack", L("后退"), "Cmd+[", group: L("浏览器"), repeatable: true,
+                  supportedIn: [BundleID.chrome, BundleID.arc],
+                  invocation: .appShortcut("navBack")),
+        ActionDef("navForward", L("前进"), "Cmd+]", group: L("浏览器"), repeatable: true,
+                  supportedIn: [BundleID.chrome, BundleID.arc],
+                  invocation: .appShortcut("navForward")),
+        ActionDef("reload", L("刷新页面"), "Cmd+R", group: L("浏览器"),
+                  supportedIn: [BundleID.chrome, BundleID.arc],
+                  invocation: .appShortcut("reload")),
+        ActionDef("newTab", L("新建标签"), "Cmd+T", group: L("浏览器"),
+                  supportedIn: [BundleID.chrome, BundleID.arc],
+                  invocation: .appShortcut("newTab")),
         ActionDef("closeTab", L("关闭当前标签"), L("Cmd+W；最后一个标签会连窗口一起关"),
-                  group: "Chrome", onlyIn: BundleID.chrome) {
-            send("closeTab")
-        },
-
-        // ── Arc ──────────────────────────────────────────────
-        // IDs 独立于 Chrome，映射界面才能在 Arc 层正确显示可用动作；
-        // 最终仍走同一组浏览器语义键位。
-        ActionDef("arcNavBack", L("后退"), "Cmd+[", group: "Arc", repeatable: true,
-                  onlyIn: BundleID.arc) { send("navBack") },
-        ActionDef("arcNavForward", L("前进"), "Cmd+]", group: "Arc", repeatable: true,
-                  onlyIn: BundleID.arc) { send("navForward") },
-        ActionDef("arcReload", L("刷新页面"), "Cmd+R", group: "Arc",
-                  onlyIn: BundleID.arc) { send("reload") },
-        ActionDef("arcNewTab", L("新建标签"), "Cmd+T", group: "Arc",
-                  onlyIn: BundleID.arc) { send("newTab") },
-        ActionDef("arcCloseTab", L("关闭当前标签"), L("Cmd+W；最后一个标签会连窗口一起关"),
-                  group: "Arc", onlyIn: BundleID.arc) { send("closeTab") },
+                  group: L("浏览器"), supportedIn: [BundleID.chrome, BundleID.arc],
+                  invocation: .appShortcut("closeTab")),
 
         // ── 切换 app (不受白名单限制, 任何地方都能用) ──────────
         ActionDef("appCycleNext", L("下一个 app"), L("像 ⌘Tab，一按就切换"),
@@ -250,19 +328,41 @@ enum Actions {
         ActionDef("switchApp", L("切换到上一个 app"), L("连按继续往前翻"), group: L("切换 app")) {
             ctx.switchToPrevious()
         },
-        ActionDef("focusClaude", L("切到 Claude Code"), group: L("切换 app")) { ctx.focus(BundleID.claude) },
-        ActionDef("focusGhostty", L("切到 Ghostty"), group: L("切换 app")) { ctx.focus(BundleID.ghostty) },
-        ActionDef("focusWeChat", L("切到微信"), group: L("切换 app")) { ctx.focus(BundleID.wechat) },
-        ActionDef("focusChrome", L("切到 Chrome"), group: L("切换 app")) { ctx.focus(BundleID.chrome) },
-        ActionDef("focusArc", L("切到 Arc"), group: L("切换 app")) { ctx.focus(BundleID.arc) },
-        ActionDef("focusSlack", L("切到 Slack"), group: L("切换 app")) { ctx.focus(BundleID.slack) },
-        ActionDef("focusHeptabase", L("切到 Heptabase"), group: L("切换 app")) {
-            ctx.focus(BundleID.heptabase)
-        },
-        ActionDef("focusCodex", L("切到 Codex"), group: L("切换 app")) { ctx.focus(BundleID.codex) },
-    ] + RaycastShortcuts.actionDefinitions
+    ] + appFocusActions + RaycastShortcuts.actionDefinitions
 
-    static let byID: [String: ActionDef] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+    /// Old IDs remain resolvable for imported configs and phone bookmarks, but
+    /// they are hidden from new mapping menus. Version 14 rewrites only shipped
+    /// defaults; genuinely custom bindings are never replaced.
+    static let legacyAliases: [String: String] = [
+        "ampNewSession": "newSession",
+        "energyNewSession": "newSession",
+        "ampPreviousThread": "contextPrevious",
+        "ampNextThread": "contextNext",
+        "codexPreviousThread": "contextPrevious",
+        "codexNextThread": "contextNext",
+        "arcCommandShiftUp": "contextPrevious",
+        "arcCommandShiftDown": "contextNext",
+        "arcNavBack": "navBack",
+        "arcNavForward": "navForward",
+        "arcReload": "reload",
+        "arcNewTab": "newTab",
+        "arcCloseTab": "closeTab",
+    ]
+
+    private static let canonicalByID: [String: ActionDef] =
+        Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+
+    static let byID: [String: ActionDef] = {
+        var result = canonicalByID
+        for (legacy, canonical) in legacyAliases {
+            if let action = canonicalByID[canonical] { result[legacy] = action }
+        }
+        return result
+    }()
+
+    static func canonicalID(_ id: String) -> String { legacyAliases[id] ?? id }
+
+    static func action(for id: String) -> ActionDef? { byID[id] }
 
     static var groups: [String] {
         var seen: [String] = []
@@ -272,7 +372,7 @@ enum Actions {
 
     static func run(_ id: String) {
         guard let a = byID[id] else { return }
-        DispatchQueue.main.async { a.run() }
+        DispatchQueue.main.async { ActionExecutor.execute(a.invocation) }
     }
 
     static func isRepeatable(_ id: String) -> Bool { byID[id]?.repeatable ?? false }
@@ -280,7 +380,7 @@ enum Actions {
     /// 在指定 app 下有效的动作。手机界面靠它动态过滤 ——
     /// 换个 app 就变死键的动作不该占着屏幕。
     static func available(in app: String) -> [ActionDef] {
-        all.filter { $0.onlyIn == nil || $0.onlyIn == app }
+        all.filter { $0.isAvailable(in: app) }
     }
 
     // MARK: - 语音 (按下/松开语义, 不走普通动作)

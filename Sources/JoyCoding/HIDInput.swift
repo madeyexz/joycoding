@@ -109,9 +109,13 @@ final class HIDInput: ObservableObject {
     @Published private(set) var testMode = false
 
     private var manager: IOHIDManager?
+    /// Elite paddles live on a Consumer-page collection that is not guaranteed
+    /// to be included by the ordinary GamePad/Joystick manager.
+    private var elitePaddleManager: IOHIDManager?
     private var lastButton: [String: Int] = [:]
     private var lastHat: [String: Int?] = [:]   // 通道 -> 上次方向
     private var triggerState: [String: Bool] = [:]
+    private var paddleState: [String: Set<Int>] = [:]
     private struct StickAxisState {
         var x = 0.0
         var y = 0.0
@@ -216,6 +220,27 @@ final class HIDInput: ObservableObject {
         IOHIDManagerScheduleWithRunLoop(mgr, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         // 非独占打开: 别的程序(比如系统的手柄框架)也能同时读, 不互相踢
         IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+
+        // Match the Elite device itself, then forward only its hidden paddle
+        // element. Forwarding the rest would duplicate every normal button from
+        // the primary manager.
+        let paddleMgr = IOHIDManagerCreate(
+            kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        elitePaddleManager = paddleMgr
+        IOHIDManagerSetDeviceMatching(paddleMgr, [
+            kIOHIDVendorIDKey: XboxHID.vendorID,
+            kIOHIDProductIDKey: XboxHID.elite2ProductID,
+        ] as CFDictionary)
+        IOHIDManagerRegisterInputValueCallback(paddleMgr, { ctx, _, _, value in
+            guard let ctx else { return }
+            let element = IOHIDValueGetElement(value)
+            guard Int(IOHIDElementGetUsagePage(element)) == XboxHID.consumerPage,
+                  Int(IOHIDElementGetUsage(element)) == XboxHID.paddleUsage else { return }
+            Unmanaged<HIDInput>.fromOpaque(ctx).takeUnretainedValue().handle(value)
+        }, ctx)
+        IOHIDManagerScheduleWithRunLoop(
+            paddleMgr, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDManagerOpen(paddleMgr, IOOptionBits(kIOHIDOptionsTypeNone))
         refreshDevices()
     }
 
@@ -256,6 +281,9 @@ final class HIDInput: ObservableObject {
         }.sorted { $0.name < $1.name }
 
         for gone in devices where !found.contains(gone) {
+            if let held = paddleState.removeValue(forKey: gone.id) {
+                for button in held { onButton(button, down: false, device: gone.id) }
+            }
             if commandChord.removeDevice(gone.id) {
                 commandChordFuse?.invalidate(); commandChordFuse = nil
                 if !HIDProof.shared.dryRun { KeySynth.modifierHold("cmd", down: false) }
@@ -286,8 +314,13 @@ final class HIDInput: ObservableObject {
             XboxHID.canonicalButton(vendor: v0, product: $0,
                                     usagePage: Int(page), usage: usage)
         }}
+        let isPaddleReport = vendor.flatMap { v0 in product.flatMap {
+            XboxHID.paddleButtons(vendor: v0, product: $0,
+                                  usagePage: Int(page), usage: usage, mask: v)
+        }}
         if page == UInt32(kHIDPage_Button) || page == UInt32(kHIDPage_GenericDesktop)
-            || page == UInt32(XboxHID.simulationPage) || canonicalButton != nil {
+            || page == UInt32(XboxHID.simulationPage) || canonicalButton != nil
+            || isPaddleReport != nil {
             DispatchQueue.main.async {
                 self.inputCount += 1
                 self.lastInput = "#\(self.inputCount) \(name) page=0x\(String(page, radix: 16)) "
@@ -300,6 +333,21 @@ final class HIDInput: ObservableObject {
             ])
         }
         let devID = vendor.flatMap { v0 in product.map { DeviceProfile.key(v0, $0) } } ?? ""
+
+        if let buttons = isPaddleReport {
+            let previous = paddleState[devID] ?? []
+            guard buttons != previous else { return }
+            paddleState[devID] = buttons
+            DispatchQueue.main.async {
+                for button in buttons.subtracting(previous) {
+                    self.onButton(button, down: true, device: devID)
+                }
+                for button in previous.subtracting(buttons) {
+                    self.onButton(button, down: false, device: devID)
+                }
+            }
+            return
+        }
 
         if rawDevices.contains(devID) {
             return      // 这只手柄走原始报告, 元素事件丢弃
@@ -430,9 +478,9 @@ final class HIDInput: ObservableObject {
             pressBeganInTestMode: testSuppressedButtons.contains(physicalKey)) {
             if down {
                 let gestures = [
-                    b.tap.map { L("单击：%@", Actions.byID[$0]?.name ?? $0) },
-                    b.double.map { L("双击：%@", Actions.byID[$0]?.name ?? $0) },
-                    b.long.map { L("长按：%@", Actions.byID[$0]?.name ?? $0) },
+                    b.tap.map { L("单击：%@", Actions.action(for: $0)?.name ?? $0) },
+                    b.double.map { L("双击：%@", Actions.action(for: $0)?.name ?? $0) },
+                    b.long.map { L("长按：%@", Actions.action(for: $0)?.name ?? $0) },
                 ].compactMap { $0 }.joined(separator: " · ")
                 lastDispatch = L("测试 按键 %@：%@", String(n), gestures)
                 HIDProof.shared.record("suppressed", [
@@ -587,7 +635,7 @@ final class HIDInput: ObservableObject {
                   let action = p.stickAction(ch, dir: key,
                                              app: AppContext.shared.frontBundle)
             else { return }
-            let name = Actions.byID[action]?.name ?? action
+            let name = Actions.action(for: action)?.name ?? action
             lastDispatch = L("测试 %@ %@：%@", ch.label,
                              DeviceProfile.dirLabel[key] ?? key, name)
             HIDProof.shared.record("suppressed", [

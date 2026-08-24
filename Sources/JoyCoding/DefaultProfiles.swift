@@ -96,30 +96,46 @@ enum DefaultProfiles {
                 "4": ButtonBinding(tap: "navBack"),
                 "7": ButtonBinding(tap: "closeTab", long: "raycastClipboardHistory"),
             ]),
-            BundleID.arc: AppOverride(buttons: [
-                "4": ButtonBinding(tap: "arcNavBack"),
-                "7": ButtonBinding(tap: "arcCloseTab", long: "raycastClipboardHistory"),
-            ]),
-            BundleID.amp: AppOverride(
+            BundleID.arc: AppOverride(
                 buttons: [
-                    "8": ButtonBinding(tap: "ampNewSession", long: "raycastAIChat"),
+                    "4": ButtonBinding(tap: "navBack"),
+                    "7": ButtonBinding(tap: "closeTab", long: "raycastClipboardHistory"),
                 ],
                 sticks: [
                     StickChannel.hat.rawValue: [
-                        "up": "ampPreviousThread",
-                        "down": "ampNextThread",
+                        "up": "contextPrevious",
+                        "down": "contextNext",
                     ],
                 ]),
+            BundleID.amp: AppOverride(
+                buttons: [
+                    "8": ButtonBinding(tap: "newSession", long: "raycastAIChat"),
+                ],
+                sticks: [
+                    StickChannel.hat.rawValue: [
+                        "up": "contextPrevious",
+                        "down": "contextNext",
+                    ],
+                ]),
+            BundleID.energy: AppOverride(buttons: [
+                "8": ButtonBinding(tap: "newSession", long: "raycastAIChat"),
+            ]),
             BundleID.codex: AppOverride(sticks: [
                 StickChannel.hat.rawValue: [
-                    "up": "codexPreviousThread",
-                    "down": "codexNextThread",
+                    "up": "contextPrevious",
+                    "down": "contextNext",
                 ],
             ]),
             BundleID.wechat: AppOverride(sticks: [
                 StickChannel.hat.rawValue: [
-                    "up": "up",
-                    "down": "down",
+                    "up": "contextPrevious",
+                    "down": "contextNext",
+                ],
+            ]),
+            BundleID.warp: AppOverride(sticks: [
+                StickChannel.hat.rawValue: [
+                    "up": "contextPrevious",
+                    "down": "contextNext",
                 ],
             ]),
         ]

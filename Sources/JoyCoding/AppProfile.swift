@@ -53,6 +53,11 @@ enum AppProfiles {
         return builtin[app]?[action]
     }
 
+    static func hasShortcut(_ action: String, app: String) -> Bool {
+        guard let spec = key(action, app: app) else { return false }
+        return !spec.raw.isEmpty
+    }
+
     /// Clearing a normal text field is universally Cmd+A then Backspace. Apps
     /// with a safer native command (terminals use Ctrl+U) override this default.
     static func clearLineKey(app: String) -> KeySpec {
@@ -92,6 +97,8 @@ enum AppProfiles {
         BundleID.wechat: [
             "sessionPrev":      .init("alt+up"),     // 菜单 Show → Previous Chat
             "sessionNext":      .init("alt+down"),
+            "contextPrevious":  .init("up"),
+            "contextNext":      .init("down"),
             "wechatNextUnread": .init("cmd+alt+down"),
             "newSession":       .init("cmd+n"),
         ],
@@ -114,9 +121,26 @@ enum AppProfiles {
             "newTab":      .init("cmd+t"),
             "closeTab":    .init("cmd+w"),
             "windowNext":  .init("cmd+`"),
+            "contextPrevious": .init("cmd+shift+up"),
+            "contextNext": .init("cmd+shift+down"),
         ],
         BundleID.amp: [
+            "newSession":      .init("cmd+n"),
+            "contextPrevious": .init("ctrl+alt+up"),
+            "contextNext":     .init("ctrl+alt+down"),
+        ],
+        BundleID.energy: [
             "newSession": .init("cmd+n"),
+        ],
+        BundleID.codex: [
+            "contextPrevious": .init("alt+cmd+up"),
+            "contextNext":     .init("alt+cmd+down"),
+        ],
+        BundleID.warp: [
+            "contextPrevious": .init("cmd+shift+["),
+            "contextNext":     .init("cmd+shift+]"),
+            "clearLine":       .init("ctrl+u"),
+            "interrupt":       .init("ctrl+c"),
         ],
         // 以下为预置, 方便不用 Claude Code 的用户开箱即用
         "com.openai.chat": [                        // ChatGPT
@@ -162,10 +186,26 @@ enum AppProfiles {
     /// 哪些动作值得在档案里配。纯通用的(回车/退格/翻页)不需要 ——
     /// 它们在所有 app 里都一样。
     static let configurable = [
-        "sessionPrev", "sessionNext", "newSession", "focusInput",
+        "sessionPrev", "sessionNext", "contextPrevious", "contextNext",
+        "newSession", "focusInput",
         "modelMenu", "effortMenu", "mode", "clearLine", "interrupt",
         "diffPane", "terminalPane", "browserPane", "sideChat", "closePane",
         "viewMode", "navBack", "navForward", "reload", "newTab", "closeTab",
         "windowNext", "wechatNextUnread",
     ]
+
+    static func isConfigurable(_ action: String) -> Bool {
+        configurable.contains(Actions.canonicalID(action))
+    }
+
+    /// Put shortcuts already supported by this app first, then keep every
+    /// semantic slot available for recording. This preserves flexibility while
+    /// making the common per-app configuration substantially easier to scan.
+    static func configurableActions(for app: String) -> [String] {
+        let user = ConfigStore.shared.config.appProfiles[app] ?? [:]
+        let present = configurable.filter {
+            builtin[app]?[$0] != nil || user[$0] != nil
+        }
+        return present + configurable.filter { !present.contains($0) }
+    }
 }

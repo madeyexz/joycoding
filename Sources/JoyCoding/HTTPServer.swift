@@ -147,7 +147,7 @@ final class HTTPServer: ObservableObject {
         if action == "pttStart" { Actions.pttStart(); return txt("ok: pttStart\n") }
         if action == "pttStop"  { Actions.pttStop();  return txt("ok: pttStop\n") }
 
-        guard Actions.byID[action] != nil else {
+        guard Actions.action(for: action) != nil else {
             return txt("unknown action: \(action)\n", "text/plain; charset=utf-8", 404)
         }
         Actions.run(action)
@@ -180,7 +180,7 @@ final class HTTPServer: ObservableObject {
     private func stateJSON() -> String {
         let front = AppContext.shared.frontBundle
         let extras = Actions.available(in: front)
-            .filter { $0.onlyIn != nil || $0.group == "Claude Code" || $0.group == L("会话") }
+            .filter { $0.supportedApps != nil || $0.group == "Claude Code" || $0.group == L("会话") }
             .filter { $0.id != "ptt" }
             .map { "{\"id\":\"\($0.id)\",\"name\":\"\($0.name)\"}" }
             .joined(separator: ",")
@@ -210,8 +210,8 @@ final class HTTPServer: ObservableObject {
             return [("navBack", "←", L("后退")), ("reload", "⟳", L("刷新")),
                     ("closeTab", "✕", L("关标签")), ("newTab", "＋", L("新标签"))]
         case BundleID.arc:
-            return [("arcNavBack", "←", L("后退")), ("arcReload", "⟳", L("刷新")),
-                    ("arcCloseTab", "✕", L("关标签")), ("arcNewTab", "＋", L("新标签"))]
+            return [("navBack", "←", L("后退")), ("reload", "⟳", L("刷新")),
+                    ("closeTab", "✕", L("关标签")), ("newTab", "＋", L("新标签"))]
         case BundleID.wechat:
             return [("delete", "⌫", L("退格")), ("clearLine", "⌧", L("清空")),
                     ("wechatNextUnread", "◉", L("未读")), ("focusInput", "⌖", L("聚焦"))]

@@ -176,9 +176,11 @@ struct Config: Codable {
         httpToken         = v(.httpToken, "")
         httpInterface     = v(.httpInterface, "all")
         restrictToTargets = v(.restrictToTargets, true)
-        targetApps        = v(.targetApps, [BundleID.ghostty, BundleID.claude,
-                                            BundleID.wechat, BundleID.chrome, BundleID.arc,
-                                            BundleID.slack, BundleID.heptabase, BundleID.codex])
+        targetApps        = v(.targetApps, [BundleID.claude, BundleID.wechat,
+                                            BundleID.chrome, BundleID.arc,
+                                            BundleID.slack, BundleID.heptabase, BundleID.codex,
+                                            BundleID.amp, BundleID.energy, BundleID.warp])
+        targetAppsVersion = v(.targetAppsVersion, 0)
         pttStyle          = v(.pttStyle, "hold")
         pttKey            = v(.pttKey, "return")
         pttMods           = v(.pttMods, ["rightshift"])
@@ -206,9 +208,14 @@ struct Config: Codable {
     /// 确认对话框里误触。语音和切 app 不受此限制。
     var restrictToTargets = true
     var targetApps: [String] = [
-        BundleID.ghostty, BundleID.claude, BundleID.wechat, BundleID.chrome, BundleID.arc,
-        BundleID.slack, BundleID.heptabase, BundleID.codex,
+        BundleID.claude, BundleID.wechat, BundleID.chrome, BundleID.arc,
+        BundleID.slack, BundleID.heptabase, BundleID.codex, BundleID.amp,
+        BundleID.energy, BundleID.warp,
     ]
+    /// One-time cleanup for target apps shipped by this fork. Keeping this
+    /// separate from the Xbox preset migration lets a user explicitly add an
+    /// app again later without having it removed on every launch.
+    var targetAppsVersion = 3
 
     /// "hold"   = 按住录, 松开出字 (Raycast / Typeless / VoiceInk)
     /// "tap"    = 按一下开始, 再按一下停止 (macOS 自带听写)
@@ -242,12 +249,65 @@ struct Config: Codable {
     var devices: [DeviceProfile] = []
     /// Versioned so an existing Elite profile gets each shipped Base-layer update
     /// once without repeatedly overwriting later user customization.
-    var xboxRaycastPresetVersion = 11
+    var xboxRaycastPresetVersion = 16
+
+    mutating func migrateTargetAppsIfNeeded() {
+        guard targetAppsVersion < 3 else { return }
+        if targetAppsVersion < 1 {
+            targetApps.removeAll { $0 == BundleID.ghostty }
+        }
+        if targetAppsVersion < 2, !targetApps.contains(BundleID.warp) {
+            targetApps.append(BundleID.warp)
+        }
+        if targetAppsVersion < 3 {
+            // Amp 1.0 moved from the retired ampcode bundle to Amp.app. Move
+            // every bundle-keyed setting, preferring anything already saved
+            // under the new ID and filling only its missing values from legacy.
+            func replacingLegacyAmp(_ values: [String]) -> [String] {
+                var seen = Set<String>()
+                return values.compactMap { value in
+                    let migrated = value == BundleID.legacyAmp ? BundleID.amp : value
+                    return seen.insert(migrated).inserted ? migrated : nil
+                }
+            }
+            targetApps = replacingLegacyAmp(targetApps)
+            remoteCorners = replacingLegacyAmp(remoteCorners)
+
+            if let legacy = appProfiles.removeValue(forKey: BundleID.legacyAmp) {
+                var current = appProfiles[BundleID.amp] ?? [:]
+                for (action, shortcut) in legacy where current[action] == nil {
+                    current[action] = shortcut
+                }
+                appProfiles[BundleID.amp] = current
+            }
+
+            for index in devices.indices {
+                guard let legacy = devices[index].overrides.removeValue(
+                    forKey: BundleID.legacyAmp) else { continue }
+                var current = devices[index].overrides[BundleID.amp] ?? AppOverride()
+                for (button, binding) in legacy.buttons where current.buttons[button] == nil {
+                    current.buttons[button] = binding
+                }
+                for (channel, directions) in legacy.sticks {
+                    var currentDirections = current.sticks[channel] ?? [:]
+                    for (direction, action) in directions where currentDirections[direction] == nil {
+                        currentDirections[direction] = action
+                    }
+                    current.sticks[channel] = currentDirections
+                }
+                devices[index].overrides[BundleID.amp] = current
+            }
+        }
+        targetAppsVersion = 3
+    }
 
     mutating func migrateXboxRaycastPresetIfNeeded() {
-        guard xboxRaycastPresetVersion < 11 else { return }
+        guard xboxRaycastPresetVersion < 16 else { return }
         let oldVersion = xboxRaycastPresetVersion
-        defer { xboxRaycastPresetVersion = 11 }
+        defer { xboxRaycastPresetVersion = 16 }
+        if oldVersion < 12, !targetApps.contains(BundleID.energy) {
+            targetApps.append(BundleID.energy)
+        }
         for index in devices.indices where devices[index].vendorID == XboxHID.vendorID {
             func replace(_ button: String, _ path: WritableKeyPath<ButtonBinding, String?>,
                          from old: String?, to new: String) {
@@ -414,6 +474,108 @@ struct Config: Codable {
                     devices[index].overrides[app] = override
                 }
             }
+
+            if oldVersion < 12 {
+                // Energy shares ampcode's Cmd+N muscle memory on Menu. Fill only
+                // a missing override so an existing user mapping always wins.
+                var override = devices[index].overrides[BundleID.energy] ?? AppOverride()
+                if override.buttons["8"] == nil {
+                    override.buttons["8"] = ButtonBinding(
+                        tap: "energyNewSession", long: "raycastAIChat")
+                }
+                devices[index].overrides[BundleID.energy] = override
+            }
+
+            if oldVersion < 13 {
+                // Arc uses Command+Shift+Up/Down for the user's preferred
+                // vertical navigation. Fill only missing directions so an
+                // existing Arc-specific mapping always wins.
+                var override = devices[index].overrides[BundleID.arc] ?? AppOverride()
+                var hat = override.sticks[StickChannel.hat.rawValue] ?? [:]
+                if hat["up"] == nil {
+                    hat["up"] = "arcCommandShiftUp"
+                }
+                if hat["down"] == nil {
+                    hat["down"] = "arcCommandShiftDown"
+                }
+                override.sticks[StickChannel.hat.rawValue] = hat
+                devices[index].overrides[BundleID.arc] = override
+            }
+
+            if oldVersion < 14 {
+                // Collapse app-named actions into stable semantic IDs. The
+                // executor now resolves the concrete shortcut from the active
+                // app profile. Every replacement below is behavior-equivalent;
+                // unknown/custom actions and all gesture structure are kept.
+                let aliases = Actions.legacyAliases
+                func canonical(_ action: String?) -> String? {
+                    guard let action else { return nil }
+                    return aliases[action] ?? action
+                }
+
+                for button in devices[index].buttons.keys {
+                    guard var binding = devices[index].buttons[button] else { continue }
+                    binding.tap = canonical(binding.tap)
+                    binding.double = canonical(binding.double)
+                    binding.long = canonical(binding.long)
+                    devices[index].buttons[button] = binding
+                }
+                for channel in devices[index].sticks.keys {
+                    guard var directions = devices[index].sticks[channel] else { continue }
+                    for direction in directions.keys {
+                        guard var binding = directions[direction] else { continue }
+                        binding.action = canonical(binding.action)
+                        directions[direction] = binding
+                    }
+                    devices[index].sticks[channel] = directions
+                }
+                for app in devices[index].overrides.keys {
+                    guard var override = devices[index].overrides[app] else { continue }
+                    for button in override.buttons.keys {
+                        guard var binding = override.buttons[button] else { continue }
+                        binding.tap = canonical(binding.tap)
+                        binding.double = canonical(binding.double)
+                        binding.long = canonical(binding.long)
+                        override.buttons[button] = binding
+                    }
+                    for channel in override.sticks.keys {
+                        guard var directions = override.sticks[channel] else { continue }
+                        for direction in directions.keys {
+                            directions[direction] = canonical(directions[direction])
+                        }
+                        override.sticks[channel] = directions
+                    }
+                    devices[index].overrides[app] = override
+                }
+            }
+
+            if oldVersion < 15 {
+                // Version 8 shipped plain Up/Down specifically in WeChat. Only
+                // rewrite the exact pair, so a partially customized layer is
+                // treated as user-owned and left alone.
+                if var wechat = devices[index].overrides[BundleID.wechat],
+                   wechat.sticks[StickChannel.hat.rawValue]?["up"] == "up",
+                   wechat.sticks[StickChannel.hat.rawValue]?["down"] == "down" {
+                    wechat.sticks[StickChannel.hat.rawValue]?["up"] = "contextPrevious"
+                    wechat.sticks[StickChannel.hat.rawValue]?["down"] = "contextNext"
+                    devices[index].overrides[BundleID.wechat] = wechat
+                }
+            }
+
+            if oldVersion < 16 {
+                // Warp cycles its pages with Cmd+Shift+[ and Cmd+Shift+]. Add
+                // only missing D-pad directions so any user override survives.
+                var override = devices[index].overrides[BundleID.warp] ?? AppOverride()
+                var hat = override.sticks[StickChannel.hat.rawValue] ?? [:]
+                if hat["up"] == nil {
+                    hat["up"] = "contextPrevious"
+                }
+                if hat["down"] == nil {
+                    hat["down"] = "contextNext"
+                }
+                override.sticks[StickChannel.hat.rawValue] = hat
+                devices[index].overrides[BundleID.warp] = override
+            }
         }
     }
 
@@ -443,7 +605,13 @@ enum AppName {
         case BundleID.slack:   return "Slack"
         case BundleID.heptabase: return "Heptabase"
         case BundleID.codex:   return "Codex"
-        case BundleID.amp:     return "ampcode"
+        case BundleID.amp, BundleID.legacyAmp: return "Amp"
+        case BundleID.energy:  return "Energy"
+        case BundleID.raycast: return "Raycast"
+        case BundleID.mail:    return "Mail"
+        case BundleID.signal:  return "Signal"
+        case BundleID.whatsapp:return "WhatsApp"
+        case BundleID.warp:    return "Warp"
         default: return bid.split(separator: ".").last.map(String.init) ?? bid
         }
     }
@@ -458,7 +626,14 @@ enum BundleID {
     static let slack   = "com.tinyspeck.slackmacgap"
     static let heptabase = "app.projectmeta.projectmeta"
     static let codex   = "com.openai.codex"
-    static let amp     = "com.hamishbultitude.ampcode"
+    static let amp     = "com.ampcode.amp.macos"
+    static let legacyAmp = "com.hamishbultitude.ampcode"
+    static let energy  = "io.fant.colleague"
+    static let raycast = "com.raycast.macos"
+    static let mail    = "com.apple.mail"
+    static let signal  = "org.whispersystems.signal-desktop"
+    static let whatsapp = "net.whatsapp.WhatsApp"
+    static let warp    = "dev.warp.Warp-Stable"
 }
 
 // MARK: - 存取
@@ -490,6 +665,7 @@ final class ConfigStore: ObservableObject {
         }
         if config.httpToken.isEmpty { config.httpToken = ConfigStore.randomToken() }
         if config.pairCode.isEmpty { config.pairCode = ConfigStore.randomPairCode() }
+        config.migrateTargetAppsIfNeeded()
         config.migrateXboxRaycastPresetIfNeeded()
         // Swift 的属性观察器在 init 里赋值不触发, 首次生成的配置不会自动落盘。
         save()

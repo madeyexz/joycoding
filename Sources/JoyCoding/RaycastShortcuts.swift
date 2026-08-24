@@ -81,9 +81,8 @@ enum RaycastShortcuts {
     static var actionDefinitions: [ActionDef] {
         definitions.filter { $0.actionID != "raycastDictation" }.map { definition in
             let detail = shortcut(for: definition.actionID)?.display ?? "Not assigned in Raycast"
-            return ActionDef(definition.actionID, definition.name, detail, group: "Raycast") {
-                trigger(definition.actionID)
-            }
+            return ActionDef(definition.actionID, definition.name, detail, group: "Raycast",
+                             invocation: .raycast(definition.actionID))
         }
     }
 
