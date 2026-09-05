@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="829" height="610" viewBox="0 110 829 610" role="img" aria-labelledby="title desc">
+  <title id="title">Xbox Elite Wireless Controller Series 2</title>
+  <desc id="desc">Front view of the black Elite Series 2 with wraparound rubber grips, metal thumbstick rings, a faceted circular D-pad, monochrome ABXY buttons, and the profile selector above three indicator bars. Original vector illustration referenced from Microsoft's official product photography.</desc>
+  <defs>
+    <!-- Shared geometry: the artwork and live input masks use these same surfaces. -->
+    <path id="trigger-surface" d="M132 184 Q138 160 198 144 Q250 129 267 140 L299 153 V167 L298 168 Q267 158 250 158 Q197 158 131 184Z"/>
+    <path id="bumper-surface" d="M131 184 Q197 158 250 158 Q267 158 298 168 L298 198 C280 180 265 171 249 170 C197 173 141 191 114 216 L121 199Z"/>
+    <circle id="stick-cap-surface" cy="-1" r="39.5"/>
+    <circle id="face-cap-surface" r="25.5"/>
+    <circle id="system-cap-surface" r="17"/>
+    <circle id="xbox-cap-surface" r="30"/>
+    <circle id="dpad-surface" cx="301" cy="427" r="67"/>
+    <rect id="profile-cap-surface" x="393" y="328" width="34" height="16" rx="8"/>
+    <linearGradient id="shell" x1="0.25" y1="0" x2="0.65" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#393b3d"/>
+      <stop offset="0.32" stop-color="#26282a"/>
+      <stop offset="0.7" stop-color="#161819"/>
+      <stop offset="1" stop-color="#101112"/>
+    </linearGradient>
+    <linearGradient id="shoulderMetal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34373a"/>
+      <stop offset="0.12" stop-color="#959b9e"/>
+      <stop offset="0.24" stop-color="#555a5d"/>
+      <stop offset="0.5" stop-color="#6a6e70"/>
+      <stop offset="0.76" stop-color="#515558"/>
+      <stop offset="0.88" stop-color="#9da2a5"/>
+      <stop offset="1" stop-color="#34373a"/>
+    </linearGradient>
+    <linearGradient id="grip" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#2d3032"/>
+      <stop offset="0.5" stop-color="#1d1f21"/>
+      <stop offset="1" stop-color="#0d0f10"/>
+    </linearGradient>
+    <pattern id="rubber" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(32)">
+      <path d="M1 1h2v2H1z M4 4h2v2H4z" fill="#7d8285" opacity="0.23"/>
+      <path d="M1 3h2v1H1z M4 6h2" stroke="#000000" stroke-opacity="0.5" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="socket" cx="0.44" cy="0.38" r="0.61">
+      <stop offset="0.65" stop-color="#090a0b"/>
+      <stop offset="0.82" stop-color="#0b0c0d"/>
+      <stop offset="0.91" stop-color="#343739"/>
+      <stop offset="1" stop-color="#222426"/>
+    </radialGradient>
+    <linearGradient id="stickMetal" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#a6aaac"/>
+      <stop offset="0.25" stop-color="#41474a"/>
+      <stop offset="0.55" stop-color="#131617"/>
+      <stop offset="0.8" stop-color="#7b8286"/>
+      <stop offset="1" stop-color="#292e30"/>
+    </linearGradient>
+    <radialGradient id="stickCap" cx="0.5" cy="0.62" r="0.59">
+      <stop offset="0" stop-color="#272a2c"/>
+      <stop offset="0.65" stop-color="#1b1d1f"/>
+      <stop offset="0.86" stop-color="#111315"/>
+      <stop offset="1" stop-color="#35383a"/>
+    </radialGradient>
+    <linearGradient id="button" x1="0.12" y1="0" x2="0.84" y2="1">
+      <stop offset="0" stop-color="#4c5052"/>
+      <stop offset="0.18" stop-color="#202325"/>
+      <stop offset="0.6" stop-color="#090b0c"/>
+      <stop offset="1" stop-color="#151719"/>
+    </linearGradient>
+    <linearGradient id="dpadMetal" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#676b6c"/>
+      <stop offset="0.48" stop-color="#444849"/>
+      <stop offset="1" stop-color="#8e9394"/>
+    </linearGradient>
+    <linearGradient id="dpadCenter" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5e6263"/>
+      <stop offset="1" stop-color="#3d4243"/>
+    </linearGradient>
+    <clipPath id="leftGripClip"><use href="#left-grip"/></clipPath>
+    <clipPath id="rightGripClip"><use href="#right-grip"/></clipPath>
+    <clipPath id="dishClip"><circle cx="301" cy="427" r="65"/></clipPath>
+    <g id="thumbstick">
+      <circle r="66" fill="url(#socket)"/>
+      <circle r="56" fill="#080a0b" stroke="url(#stickMetal)" stroke-width="3"/>
+      <circle cy="-1" r="48" fill="#101213" stroke="#3c4143" stroke-width="1.5"/>
+      <circle cy="-1" r="43.5" fill="none" stroke="#555a5c" stroke-opacity="0.65" stroke-width="5" stroke-dasharray="1.1 2.2"/>
+      <use href="#stick-cap-surface" fill="url(#stickCap)" stroke="#050607" stroke-width="2"/>
+      <circle cy="-1" r="33" fill="none" stroke="#414648" stroke-opacity="0.36" stroke-width="1"/>
+      <path d="M-34-30 A45 45 0 0 1 28-36" fill="none" stroke="#737a7d" stroke-opacity="0.36" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <g id="faceButton">
+      <circle cy="1" r="29" fill="#0b0d0e" stroke="#363a3c" stroke-width="1.2"/>
+      <use href="#face-cap-surface" fill="url(#button)" stroke="#050607" stroke-width="1.5"/>
+      <path d="M-21 10 A23.5 23.5 0 0 1-9-22" fill="none" stroke="#aeb5b8" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M10-19 Q19-17 19-7" fill="none" stroke="#b9bec0" stroke-opacity="0.15" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g id="systemButton">
+      <circle cy="1" r="19.5" fill="#111314" stroke="#303436" stroke-width="1"/>
+      <use href="#system-cap-surface" fill="url(#button)" stroke="#080a0b" stroke-width="1.5"/>
+      <path d="M-14 5 A15 15 0 0 1-6-14" fill="none" stroke="#73797c" stroke-width="0.8"/>
+    </g>
+  </defs>
+
+  <!-- The Elite has a continuous, low shoulder deck; no projecting Series X|S triggers. -->
+  <g id="shoulders">
+    <path d="M299 153H520V168H299Z" fill="url(#shoulderMetal)"/>
+    <use href="#trigger-surface" fill="url(#shoulderMetal)" stroke="#73787b" stroke-width="1.3"/>
+    <use href="#trigger-surface" transform="translate(819 0) scale(-1 1)" fill="url(#shoulderMetal)" stroke="#73787b" stroke-width="1.3"/>
+    <use href="#bumper-surface" fill="#171a1c"/>
+    <use href="#bumper-surface" transform="translate(819 0) scale(-1 1)" fill="#171a1c"/>
+    <path d="M299 154V167 M520 154V167" fill="none" stroke="#101213" stroke-width="2"/>
+    <path d="M304 154 H515" fill="none" stroke="#969c9f" stroke-opacity="0.45" stroke-width="1.5"/>
+  </g>
+
+  <path id="shell-body" d="M249 170 C274 171 291 191 310 211 C329 233 336 248 366 250 H454 C484 248 491 233 510 211 C531 187 547 169 570 170 C622 173 677 191 704 216 C720 236 735 284 753 338 C780 416 802 487 811 556 C820 617 803 665 754 694 C739 703 717 700 701 686 C669 657 637 617 607 580 C591 560 583 549 574 545 C558 539 493 540 410 540 C328 540 263 539 245 545 C235 549 227 563 211 583 C181 621 149 661 117 688 C100 702 83 705 65 696 C17 672 1 624 8 562 C15 492 40 410 65 338 C83 284 98 236 114 216 C141 191 197 173 249 170Z" fill="url(#shell)" stroke="#53585b" stroke-width="1.5"/>
+
+  <!-- The center faceplate is flush with the sculpted shoulders. -->
+  <path d="M250 171 Q272 171 310 213 Q336 250 366 250 H454 Q484 250 510 213 Q548 171 570 171 Q546 167 522 168 H298 Q274 165 250 171Z" fill="#303335"/>
+  <path d="M124 219 Q173 185 245 178 M575 178 Q649 185 696 219" fill="none" stroke="#777d80" stroke-opacity="0.13" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Wraparound grips follow the diagonal faceplate seams seen in the official front view. -->
+  <g id="grips" stroke="#0b0d0e" stroke-width="2">
+    <path id="left-grip" d="M105 231 C91 265 83 292 77 319 C70 349 93 369 121 397 L217 496 Q242 522 245 545 C230 551 221 571 210 585 C179 625 147 664 116 689 Q91 711 65 696 C17 672 1 624 8 562 C15 492 40 410 65 338 Q89 260 105 231Z" fill="url(#grip)"/>
+    <path id="right-grip" d="M714 231 C728 265 736 292 742 319 C749 349 726 369 698 397 L602 496 Q577 522 574 545 C589 551 598 571 609 585 C640 625 672 664 703 689 Q727 709 754 694 C803 665 820 617 811 556 C802 487 780 416 753 338 Q730 260 714 231Z" fill="url(#grip)"/>
+  </g>
+  <rect x="0" y="225" width="250" height="485" fill="url(#rubber)" clip-path="url(#leftGripClip)"/>
+  <rect x="570" y="225" width="250" height="485" fill="url(#rubber)" clip-path="url(#rightGripClip)"/>
+  <path d="M79 314 C73 345 90 365 122 397 L218 496 Q242 522 245 539 M740 314 C746 345 729 365 697 397 L601 496 Q577 522 574 539" fill="none" stroke="#6c7275" stroke-opacity="0.32" stroke-width="1.4"/>
+  <path d="M246 545 Q311 535 410 538 Q509 535 573 545" fill="none" stroke="#050607" stroke-width="5"/>
+  <path d="M249 546 Q322 541 410 543 Q498 541 570 546" fill="none" stroke="#6a7073" stroke-opacity="0.44" stroke-width="1.2"/>
+
+  <g id="left-stick" transform="translate(200 292)"><use href="#thumbstick"/></g>
+  <g id="right-stick" transform="translate(519 425)"><use href="#thumbstick"/></g>
+
+  <!-- Nine planar faces form the circular concave metal dish, not a cross or radial pie. -->
+  <g id="dpad">
+    <circle cx="301" cy="428" r="71" fill="#090b0c" stroke="#303537" stroke-width="2"/>
+    <use href="#dpad-surface" fill="url(#dpadMetal)" stroke="#899093" stroke-width="1"/>
+    <g clip-path="url(#dishClip)">
+      <circle cx="301" cy="427" r="65" fill="url(#dpadMetal)"/>
+      <path d="M231 357H277V404H231Z" fill="#414647"/>
+      <path d="M277 357H325V404H277Z" fill="#555a5c"/>
+      <path d="M325 357H371V404H325Z" fill="#303537"/>
+      <path d="M231 404H277V451H231Z" fill="#64696a"/>
+      <path d="M277 404H325V451H277Z" fill="url(#dpadCenter)"/>
+      <path d="M325 404H371V451H325Z" fill="#73797b"/>
+      <path d="M231 451H277V497H231Z" fill="#4d5355"/>
+      <path d="M277 451H325V497H277Z" fill="#8b9193"/>
+      <path d="M325 451H371V497H325Z" fill="#697073"/>
+      <path d="M277 360V494 M325 360V494 M235 404H367 M235 451H367" fill="none" stroke="#b1b8bb" stroke-opacity="0.1" stroke-width="0.7"/>
+    </g>
+    <path d="M301 344V356 M301 499V511 M218 427H230 M372 427H384 M245 371L253 379 M349 475L357 483 M245 483L253 475 M349 379L357 371" fill="none" stroke="#899194" stroke-opacity="0.7" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M271 349L274 357 M328 497L331 505 M223 397L231 400 M371 454L379 457 M223 457L231 454 M371 400L379 397 M271 505L274 497 M328 357L331 349" fill="none" stroke="#777f83" stroke-opacity="0.5" stroke-width="1"/>
+  </g>
+
+  <!-- Black translucent caps and gray legends are specific to the black Elite Series 2. -->
+  <g id="face-buttons" fill="#92989b">
+    <g id="button-y" transform="translate(623 237)">
+      <use href="#faceButton"/>
+      <path d="M-14-16H-7L0-3 7-16H14L3 3V17H-3V3Z"/>
+    </g>
+    <g id="button-x" transform="translate(567 291)">
+      <use href="#faceButton"/>
+      <path d="M-14-16H-7L0-5 7-16H14L4 0 15 17H7L0 5-7 17H-15L-4 0Z"/>
+    </g>
+    <g id="button-b" transform="translate(678 293)">
+      <use href="#faceButton"/>
+      <path fill-rule="evenodd" d="M-10-16H1Q13-16 13-7Q13-2 8 0Q15 2 15 9Q15 17 2 17H-10ZM-4-10V-2H1Q7-2 7-6Q7-10 1-10ZM-4 3V11H2Q9 11 9 7Q9 3 2 3Z"/>
+    </g>
+    <g id="button-a" transform="translate(622 349)">
+      <use href="#faceButton"/>
+      <path fill-rule="evenodd" d="M-4-16H4L16 17H9L6 8H-6L-9 17H-16ZM0-9-4 3H4Z"/>
+    </g>
+  </g>
+
+  <g id="xbox-button" transform="translate(410 210)">
+    <circle cy="1" r="34" fill="#131617" stroke="#444a4d" stroke-width="1.2"/>
+    <use href="#xbox-cap-surface" fill="#dadddf" stroke="#f1f2f3" stroke-width="1"/>
+    <path d="M-20-22 Q-13-25 0-15 Q13-25 20-22 Q11-18 4-11 C18 2 24 13 25 19 C16 9 8 1 0-5 C-8 1-16 9-25 19 C-24 13-18 2-4-11 Q-11-18-20-22Z" fill="#171a1c"/>
+    <path d="M-12-27 Q0-23 12-27 Q0-31-12-27Z" fill="#25292b"/>
+  </g>
+  <g id="view-button" transform="translate(350 293)">
+    <use href="#systemButton"/>
+    <path d="M-2-3H9V6H-2Z M-5 2H-9V-8H2V-5" fill="none" stroke="#b1b6b9" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+  <g id="menu-button" transform="translate(470 293)">
+    <use href="#systemButton"/>
+    <path d="M-8-6H8 M-8 0H8 M-8 6H8" fill="none" stroke="#b1b6b9" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <g id="profile-button">
+    <rect x="389" y="325" width="42" height="23" rx="11.5" fill="#080a0b" stroke="#33393c" stroke-width="1"/>
+    <use href="#profile-cap-surface" fill="url(#button)" stroke="#070809" stroke-width="1"/>
+    <path d="M398 329H419" fill="none" stroke="#727a7e" stroke-opacity="0.65" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+  <g id="profile-indicators" fill="#b7bfc2" stroke="#535b5f" stroke-width="0.8">
+    <rect x="401" y="409" width="18" height="5" rx="2.5"/>
+    <rect x="401" y="423" width="18" height="5" rx="2.5"/>
+    <rect x="401" y="437" width="18" height="5" rx="2.5"/>
+  </g>
+  <!-- Non-painting input regions. JoyCoding renders the selected use as a
+       transparent highlight, preserving this SVG's viewBox and transforms. -->
+  <g id="input-regions" fill="none" stroke="none">
+    <use id="highlight-lt" href="#trigger-surface"/>
+    <use id="highlight-rt" href="#trigger-surface" transform="translate(819 0) scale(-1 1)"/>
+    <use id="highlight-lb" href="#bumper-surface"/>
+    <use id="highlight-rb" href="#bumper-surface" transform="translate(819 0) scale(-1 1)"/>
+    <use id="highlight-left-stick" href="#stick-cap-surface" transform="translate(200 292)"/>
+    <use id="highlight-right-stick" href="#stick-cap-surface" transform="translate(519 425)"/>
+    <use id="highlight-dpad" href="#dpad-surface"/>
+    <use id="highlight-y" href="#face-cap-surface" transform="translate(623 237)"/>
+    <use id="highlight-x" href="#face-cap-surface" transform="translate(567 291)"/>
+    <use id="highlight-b" href="#face-cap-surface" transform="translate(678 293)"/>
+    <use id="highlight-a" href="#face-cap-surface" transform="translate(622 349)"/>
+    <use id="highlight-view" href="#system-cap-surface" transform="translate(350 293)"/>
+    <use id="highlight-menu" href="#system-cap-surface" transform="translate(470 293)"/>
+    <use id="highlight-xbox" href="#xbox-cap-surface" transform="translate(410 210)"/>
+    <use id="highlight-profile" href="#profile-cap-surface"/>
+  </g>
+</svg>

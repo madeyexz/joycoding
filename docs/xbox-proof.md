@@ -325,7 +325,55 @@ local state endpoint: `testMode` changed from `true` to `false` and
 
 ## Controller illustration
 
-The installed app now renders the controller from Xelu's full Xbox Series SVG
+### Elite Series 2 redraw — 2026-09-05
+
+Elite Series 2 now uses its own complete SVG, referenced from Microsoft's
+[official front-view product photo](https://assets.xboxservices.com/assets/de/5c/de5c31bd-b962-4f9f-af98-32a6331ac91b.jpg?n=999666_Buy-Box-Image-0_2_829x799.jpg).
+It includes the black faceplate, wraparound textured grips, metal shoulder and
+thumbstick rims, nine-face circular D-pad, monochrome ABXY caps, and the Profile
+button above three indicator bars. Standard Xbox Series artwork is separate.
+
+The artwork uses an `829 × 610` viewBox starting at `y = 110`. Elite-specific
+anchors follow its control centers; canonical input IDs and bindings are
+unchanged. Resting Elite controls are entirely in the SVG; SwiftUI adds only
+transient highlights and direction cues.
+
+The matching screenshots below use the native Mapping screen in a dark-mode,
+isolated `JOYCODING_UI_PREVIEW=xboxElite2` session. They are **UI previews**,
+not evidence of a physical controller connection or input event.
+
+Before:
+
+![Elite Series 2 before the redraw](images/proof/elite-series-2-before.jpg)
+
+After:
+
+![Elite Series 2 after the redraw](images/proof/elite-series-2-after.jpg)
+
+Validation: `swift test` completed with 45 passed, one environment-specific
+test skipped, and no failures. The universal arm64/x86_64 build and bundled
+checks passed via `./build.sh --no-notarize`. The signed app was synced to
+`/Applications/JoyCoding.app`; the installed SVG matches the source byte for
+byte. Native macOS rendering and the Mapping screen were visually inspected.
+
+### Button-highlight alignment
+
+Front-button highlights now reference the same SVG surfaces as the visible
+controls, including the full curved LT/RT and LB/RB surfaces. Face buttons,
+thumbstick caps, D-pad, View, Menu, Xbox, and Profile share their geometry with
+the corresponding highlight masks. Hovering direction rows previews the
+correct stick or D-pad direction; reserved controls can be highlighted without
+making them assignable.
+
+The native mask regression tests cover every front input, verify that each
+mask contains its actual control center, and check that unrelated shell and
+background points remain transparent. `swift test` passed 47 tests with one
+opt-in local test skipped. The universal build and bundled checks passed, and
+the installed app was reopened with `JOYCODING_UI_PREVIEW=xboxElite2`.
+
+### Previous shared Xbox Series illustration
+
+The previous artwork rendered the controller from Xelu's full Xbox Series SVG
 diagram (CC0), rather than approximating the controller with a handful of
 SwiftUI curves. JoyCoding adds its own dark shell backing, exact live-input
 anchors, colored ABXY caps, and Elite Series 2-specific faceted D-pad and

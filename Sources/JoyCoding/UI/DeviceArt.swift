@@ -234,6 +234,36 @@ struct DeviceArt {
             pos: .init(x: 0.500, y: 0.499),
             size: .init(width: 0.050, height: 0.076), shape: .circle,
             side: .left, kind: .profile))
+        // Coordinates follow the dedicated SVG's 829 × 610 viewBox (y starts
+        // at 110). Input IDs stay canonical; only visual hit/highlight geometry
+        // changes. Keep this separate from the standard Series controller.
+        let geometry: [Int: CGRect] = [
+            XboxHID.leftTriggerButton: CGRect(x: 199, y: 149, width: 92, height: 18),
+            XboxHID.rightTriggerButton: CGRect(x: 620, y: 149, width: 92, height: 18),
+            5: CGRect(x: 209, y: 176, width: 134, height: 22),
+            6: CGRect(x: 610, y: 176, width: 134, height: 22),
+            9: CGRect(x: 200, y: 292, width: 112, height: 112),
+            StickChannel.left.anchorID: CGRect(x: 200, y: 292, width: 112, height: 112),
+            10: CGRect(x: 519, y: 425, width: 112, height: 112),
+            StickChannel.right.anchorID: CGRect(x: 519, y: 425, width: 112, height: 112),
+            StickChannel.hat.anchorID: CGRect(x: 301, y: 427, width: 134, height: 134),
+            4: CGRect(x: 623, y: 237, width: 54, height: 54),
+            3: CGRect(x: 567, y: 291, width: 54, height: 54),
+            2: CGRect(x: 678, y: 293, width: 54, height: 54),
+            1: CGRect(x: 622, y: 349, width: 54, height: 54),
+            7: CGRect(x: 350, y: 293, width: 36, height: 36),
+            8: CGRect(x: 470, y: 293, width: 36, height: 36),
+            11: CGRect(x: 410, y: 210, width: 62, height: 62),
+            12: CGRect(x: 410, y: 336, width: 40, height: 21),
+        ]
+        anchors = anchors.map { a in
+            guard let g = geometry[a.id] else { return a }
+            return ButtonAnchor(id: a.id, label: a.label,
+                pos: CGPoint(x: g.origin.x / 829, y: (g.origin.y - 110) / 610),
+                size: CGSize(width: g.width / 829, height: g.height / 610),
+                shape: a.kind == .profile ? .capsuleH : a.shape,
+                side: a.side, kind: a.kind)
+        }
         // Rear controls are normally hidden from the front illustration. Their
         // approximate grip positions light up on hover/press while the rows stay
         // together in a dedicated mapping section.
@@ -255,7 +285,7 @@ struct DeviceArt {
                   size: .init(width: 0.035, height: 0.150), shape: .capsuleV,
                   side: .right, kind: .paddle),
         ])
-        return DeviceArt(anchors: anchors, aspect: xbox.aspect, railSide: nil,
+        return DeviceArt(anchors: anchors, aspect: 829.0 / 610.0, railSide: nil,
                          style: .xboxElite2, hatLabel: xbox.hatLabel)
     }()
 
@@ -334,31 +364,28 @@ struct DeviceBody: View {
 
     private let bodyColor = Color(red: 0.16, green: 0.17, blue: 0.19)
 
-    /// Xelu's CC0 Xbox Series diagram is close enough to the Elite Series 2
-    /// front shell that it makes a much better geometric base than a hand-
-    /// approximated silhouette. JoyCoding still owns every live overlay, so
-    /// the imported artwork never dictates input behavior.
-    ///
-    /// The source art is white line work. Recoloring it once per appearance
-    /// keeps the line weight readable on both hero surfaces: dark ink on the
-    /// light tile, near-white ink on the dark one.
-    private static func xboxVector(ink: String) -> NSImage? {
+    /// Standard Series controllers retain the CC0 line art. Elite Series 2
+    /// has its own complete, full-color vector, including all resting controls.
+    private static func controllerSVG(named name: String) -> String? {
         let bundle = Bundle.main
         let urls = [
-            bundle.url(forResource: "XboxSeriesController", withExtension: "svg",
-                       subdirectory: "ControllerArt"),
-            bundle.url(forResource: "XboxSeriesController", withExtension: "svg"),
+            bundle.url(forResource: name, withExtension: "svg", subdirectory: "ControllerArt"),
+            bundle.url(forResource: name, withExtension: "svg"),
         ]
-        guard let url = urls.compactMap({ $0 }).first,
-              var svg = try? String(contentsOf: url, encoding: .utf8)
-        else { return nil }
-        svg = svg.replacingOccurrences(of: "#ffffff", with: ink,
-                                       options: .caseInsensitive)
+        guard let url = urls.compactMap({ $0 }).first else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    private static func controllerVector(named name: String, ink: String) -> NSImage? {
+        guard let source = controllerSVG(named: name) else { return nil }
+        let svg = source.replacingOccurrences(of: "#ffffff", with: ink, options: .caseInsensitive)
         return NSImage(data: Data(svg.utf8))
     }
 
-    private static let xboxVectorLight: NSImage? = xboxVector(ink: "#3c3c40")
-    private static let xboxVectorDark: NSImage? = xboxVector(ink: "#e3e4e9")
+    private static let xboxVectorLight = controllerVector(named: "XboxSeriesController", ink: "#3c3c40")
+    private static let xboxVectorDark = controllerVector(named: "XboxSeriesController", ink: "#e3e4e9")
+    private static let eliteArtwork = controllerSVG(named: "XboxEliteSeries2Controller")
+        .flatMap { EliteControllerArtwork(source: $0) }
 
     private var isXbox: Bool {
         art.style == .xbox || art.style == .xboxElite2
@@ -367,7 +394,8 @@ struct DeviceBody: View {
     private var dark: Bool { scheme == .dark }
 
     private var xboxVectorImage: NSImage? {
-        dark ? Self.xboxVectorDark : Self.xboxVectorLight
+        if art.style == .xboxElite2 { return Self.eliteArtwork?.image }
+        return dark ? Self.xboxVectorDark : Self.xboxVectorLight
     }
 
     private var usesXboxVector: Bool {
@@ -394,15 +422,24 @@ struct DeviceBody: View {
             ZStack(alignment: .topLeading) {
                 if usesXboxVector {
                     xboxArtwork(w: w, h: h)
+                    if art.style == .xboxElite2 {
+                        eliteInputHighlights(w: w, h: h)
+                    }
                     if let dpad = art.anchors.first(where: {
                         StickChannel.from(anchorID: $0.id) == .hat
                     }) {
-                        xboxDpadOverlay(dpad, w: w, h: h)
+                        if art.style == .xboxElite2 {
+                            eliteDpadHighlight(dpad, w: w, h: h)
+                        } else {
+                            xboxDpadOverlay(dpad, w: w, h: h)
+                        }
                     }
                     ForEach(art.anchors.filter {
                         StickChannel.from(anchorID: $0.id) == nil
                     }) { a in
-                        xboxControlOverlay(a, w: w, h: h)
+                        if art.style != .xboxElite2 || a.kind == .paddle {
+                            xboxControlOverlay(a, w: w, h: h)
+                        }
                     }
                 } else {
                     shoulders(w: w, h: h)
@@ -436,13 +473,13 @@ struct DeviceBody: View {
     private func xboxArtwork(w: CGFloat, h: CGFloat) -> some View {
         if let image = xboxVectorImage {
             ZStack {
-                // 线稿本身是空心的。在轮廓里垫一层很浅的机身色, 手柄才有"面";
-                // 这条路径是照着同一张 CC0 线稿标定的, 所以能对上边界。
-                xboxPath(w, h)
-                    .fill(LinearGradient(
-                        colors: dark ? [Color(white: 0.255), Color(white: 0.165)]
-                                     : [Color(white: 0.995), Color(white: 0.945)],
-                        startPoint: .top, endPoint: .bottom))
+                if art.style != .xboxElite2 {
+                    xboxPath(w, h)
+                        .fill(LinearGradient(
+                            colors: dark ? [Color(white: 0.255), Color(white: 0.165)]
+                                         : [Color(white: 0.995), Color(white: 0.945)],
+                            startPoint: .top, endPoint: .bottom))
+                }
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
@@ -453,11 +490,8 @@ struct DeviceBody: View {
         }
     }
 
-    /// The source diagram depicts a Series controller's cross D-pad. The
-    /// connected Elite Series 2 has the circular faceted metal dish, so this
-    /// opaque live overlay both corrects the hardware model and covers the
-    /// source D-pad without changing the source asset. The machined dish is
-    /// brushed metal, so it darkens with the surrounding surface.
+    /// Preserve the standard Series diagram's existing dish overlay. Elite's
+    /// model-specific dish is drawn directly in its SVG instead.
     private func xboxDpadOverlay(_ a: ButtonAnchor, w: CGFloat, h: CGFloat) -> some View {
         let side = max(28, a.size.width * w * 1.10)
         let active = liveDir?.0 == .hat ? liveDir?.1 : nil
@@ -495,9 +529,56 @@ struct DeviceBody: View {
         .frame(width: w, height: h)
     }
 
-    /// Preserve the source diagram at rest. We only replace controls that are
-    /// physically different on Elite 2 (Profile and D-pad), restore Xbox's
-    /// colored ABXY legends, or paint a transient input highlight.
+    private func eliteInputHighlights(w: CGFloat, h: CGFloat) -> some View {
+        let inputs = [highlighted, liveDir?.0.anchorID].compactMap { $0 }
+        let regions = Array(Set(inputs.compactMap { EliteControllerArtwork.regions[$0] })).sorted()
+        return ZStack {
+            ForEach(regions, id: \.self) { region in
+                if let image = Self.eliteArtwork?.highlight(region: region) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: w, height: h)
+                        .shadow(color: Color.accentColor.opacity(0.35), radius: 3)
+                }
+            }
+        }
+        .frame(width: w, height: h)
+        .allowsHitTesting(false)
+    }
+
+    /// Only direction chevrons need SwiftUI positioning. The dish's outline
+    /// and fill come from the same SVG surface used by the resting artwork.
+    @ViewBuilder
+    private func eliteDpadHighlight(_ a: ButtonAnchor, w: CGFloat, h: CGFloat) -> some View {
+        let active = liveDir?.0 == .hat ? liveDir?.1 : nil
+        let side = a.size.width * w
+        if active != nil {
+            ZStack {
+                ForEach([
+                    ("up", "chevron.up", CGPoint(x: 0.5, y: 0.18)),
+                    ("right", "chevron.right", CGPoint(x: 0.82, y: 0.5)),
+                    ("down", "chevron.down", CGPoint(x: 0.5, y: 0.82)),
+                    ("left", "chevron.left", CGPoint(x: 0.18, y: 0.5)),
+                ], id: \.0) { key, icon, pos in
+                    if active == key {
+                        Image(systemName: icon)
+                            .font(.system(size: max(7, side * 0.15), weight: .bold))
+                            .foregroundStyle(.white)
+                            .position(x: pos.x * side, y: pos.y * side)
+                    }
+                }
+            }
+            .frame(width: side, height: side)
+            .shadow(color: Color.accentColor.opacity(0.4), radius: 4)
+            .position(x: a.pos.x * w, y: a.pos.y * h)
+            .frame(width: w, height: h)
+        }
+    }
+
+    /// Elite resting controls belong to its SVG; app code only paints input
+    /// highlights. Standard Series art retains its existing control overlays.
     @ViewBuilder
     private func xboxControlOverlay(_ a: ButtonAnchor, w: CGFloat, h: CGFloat) -> some View {
         let cx = a.pos.x * w, cy = a.pos.y * h
@@ -508,7 +589,7 @@ struct DeviceBody: View {
         let moving = stickChannel != nil && liveDir?.0 == stickChannel
 
         ZStack {
-            if isFace {
+            if isFace && art.style != .xboxElite2 {
                 Circle()
                     .fill(hot ? Color.accentColor.opacity(0.85) : controlSurface)
                     .overlay(Circle().stroke(hot ? Color.accentColor : controlEdge,
@@ -518,7 +599,7 @@ struct DeviceBody: View {
                 Text(a.label)
                     .font(.system(size: max(8, bw * 0.52), weight: .bold, design: .rounded))
                     .foregroundStyle(hot ? Color.white : faceLegend(a.label))
-            } else if a.kind == .profile {
+            } else if a.kind == .profile && art.style != .xboxElite2 {
                 Capsule()
                     .fill(hot ? Color.accentColor.opacity(0.85) : controlSurface)
                     .overlay(Capsule().stroke(hot ? Color.accentColor : controlEdge,

@@ -116,7 +116,7 @@ esac
 [ -f icon/AppIcon.icns ] && cp icon/AppIcon.icns "$APP/Contents/Resources/"
 if [ -f Assets/ControllerArt/XboxSeriesController.svg ]; then
   mkdir -p "$APP/Contents/Resources/ControllerArt"
-  cp Assets/ControllerArt/XboxSeriesController.svg \
+  cp Assets/ControllerArt/*.svg \
     "$APP/Contents/Resources/ControllerArt/"
 fi
 [ -f THIRD_PARTY_NOTICES.md ] && cp THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"

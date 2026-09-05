@@ -28,6 +28,7 @@ struct MappingView: View {
 
     @State private var selectedID: String?
     @State private var hot: Int?              // 鼠标悬停高亮的按键
+    @State private var hoveredDirection: (StickChannel, String)?
     @State private var hotCell: String?       // 悬停的那一格动作选择器
     @State private var actionPickerCell: String?
     @State private var recentlyChangedCell: String?
@@ -305,8 +306,8 @@ struct MappingView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    /// 手柄图放在一块随系统明暗切换的底板上, 当作产品图看待:
-    /// 浅色下是浅底深线, 深色下是深底浅线, 两边都保持线稿的对比度。
+    /// The tile follows the system appearance. Elite's black product artwork
+    /// keeps its material colors; the other diagrams adapt their line colors.
     private func heroPanel(_ art: DeviceArt) -> some View {
         let boxW = MapMetrics.sidebar - MapMetrics.hPad * 2 - 28
         let w = min(boxW, MapMetrics.heroBox * art.aspect)
@@ -322,7 +323,7 @@ struct MappingView: View {
                 .blur(radius: 7)
                 .offset(y: h * 0.47)
             DeviceBody(art: art, bound: bound,
-                       highlighted: pressed ?? hot, liveDir: liveDir)
+                       highlighted: pressed ?? hot, liveDir: liveDir ?? hoveredDirection)
                 .frame(width: w, height: h)
         }
             .frame(width: w, height: h)
@@ -605,7 +606,7 @@ struct MappingView: View {
         let overridden = !layer.isEmpty
             && (profile?.isOverridden(ch, dir: dir, app: layer) ?? false)
         let live = liveDir?.0 == ch && liveDir?.1 == dir
-        return rowShell(live: live, hovered: false) {
+        return rowShell(live: live, hovered: hoveredDirection?.0 == ch && hoveredDirection?.1 == dir) {
             HStack(spacing: MapMetrics.colGap) {
                 dirLabelCell(dir, live: live, bound: act != nil)
                 actionCell("\(ch.rawValue).\(dir)", act,
@@ -622,10 +623,21 @@ struct MappingView: View {
                 }
             }
         }
+        .onHover { inside in
+            if inside {
+                hot = ch.anchorID
+                hoveredDirection = (ch, dir)
+            } else {
+                if hot == ch.anchorID { hot = nil }
+                if hoveredDirection?.0 == ch && hoveredDirection?.1 == dir {
+                    hoveredDirection = nil
+                }
+            }
+        }
     }
 
     private func reservedRow(_ a: ButtonAnchor, hardwareProfile: Bool) -> some View {
-        rowShell(live: false, hovered: false) {
+        rowShell(live: false, hovered: hot == a.id) {
             HStack(spacing: MapMetrics.colGap) {
                 labelCell(a, bound: false, icon: "lock.fill")
                 Text(hardwareProfile
@@ -636,6 +648,7 @@ struct MappingView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .onHover { hot = $0 ? a.id : (hot == a.id ? nil : hot) }
     }
 
     // MARK: - 单元格
@@ -802,6 +815,11 @@ struct MappingView: View {
     /// 组内按物理位置读: 从上到下, 同排从左到右。
     /// 摇杆组例外: 先「按下」(按 x), 再方向通道 (hat → 左 → 右)。
     private func gridRank(_ a: ButtonAnchor) -> Int {
+        // Keep Xbox trigger and bumper pairs together even when a more
+        // accurate front-view drawing puts their anchors in the same y band.
+        if let shoulderRank = ["LT", "RT", "LB", "RB"].firstIndex(of: a.label) {
+            return shoulderRank
+        }
         if let ch = StickChannel.from(anchorID: a.id) {
             return 100 + (StickChannel.allCases.firstIndex(of: ch) ?? 0)
         }
