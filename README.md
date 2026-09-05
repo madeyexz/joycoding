@@ -17,8 +17,9 @@ switch sessions from a Joy-Con in one hand, while the other stays on the mouse.
 Or leave the controller in a drawer and use your phone.
 
 <div align="center">
-<img src="docs/images/en/mapping.png" width="760" alt="Mapping screen">
+<img src="docs/images/proof/elite-series-2-after.jpg" width="760" alt="JoyCoding Mapping screen with the new Xbox Elite Series 2 artwork">
 </div>
+<p align="center"><sub>Xbox Elite Series 2 in UI preview mode; no controller connection is required.</sub></p>
 
 ## Why
 
@@ -38,7 +39,7 @@ None of that needs a keyboard. JoyCoding maps that loop onto a controller:
 - **Push-to-talk** that preserves sided shortcut chords (including Right Shift + Return)
 - **Phone remote** over your LAN — pair once with a 6-digit code
 - **Battery level** for Nintendo controllers (macOS does not expose this; see [docs](docs/battery.md))
-- Live button highlighting while you map, so you never guess a button number
+- Live button highlighting while you map, with **Elite Series 2 highlights that follow the actual SVG control shapes**
 - **Test Mode** highlights physical input and resolves its binding without firing any action
 - **Key profiles for 10 apps out of the box** — Claude Code, ChatGPT, Cursor,
   VS Code, Ghostty, iTerm2, Terminal, Chrome, Arc, WeChat
@@ -97,6 +98,15 @@ See the [physical Xbox Bluetooth proof](docs/xbox-proof.md) for the raw HID →
 normalized input → semantic action traces.
 
 ### Xbox layout in this fork
+
+<p align="center">
+<img src="Assets/ControllerArt/XboxEliteSeries2Controller.svg" width="480" alt="Black Xbox Elite Series 2 with textured grips, metal D-pad, and profile indicators">
+</p>
+
+The Elite Series 2 has dedicated vector artwork based on Microsoft's official
+product photos. Hover a button or direction row to locate its control: the
+highlight follows the same SVG surface as the artwork, including the curved
+triggers and bumpers. See the [before-and-after screenshots](docs/xbox-proof.md#controller-illustration).
 
 The default Xbox profile keeps the core editing taps and replays the exact
 global shortcuts already assigned in Raycast. JoyCoding reads Raycast's newest

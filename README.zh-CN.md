@@ -16,8 +16,9 @@
 不想拿手柄的时候，手机也能干同样的事。
 
 <div align="center">
-<img src="docs/images/zh/mapping.png" width="760" alt="映射界面">
+<img src="docs/images/proof/elite-series-2-after.jpg" width="760" alt="JoyCoding 映射界面与全新的 Xbox Elite Series 2 手柄图">
 </div>
+<p align="center"><sub>Xbox Elite Series 2 的 UI 预览（英文界面），无需连接手柄。</sub></p>
 
 ## 为什么做这个
 
@@ -37,7 +38,7 @@
 - **按住说话**可以合成裸修饰键（比如按住左 Control）
 - **手机遥控**走局域网，6 位配对码只输一次
 - 任天堂手柄的**电量显示**（macOS 完全不暴露这个，做法见 [文档](docs/battery.md)）
-- 配置时按键**实时点亮**，不用猜编号
+- 配置时按键**实时点亮**；Elite Series 2 的高亮与 SVG 中实际按键的形状一致
 - **9 个 app 的键位预置开箱即用** —— Claude Code、ChatGPT、Cursor、
   VS Code、Ghostty、iTerm2、Terminal、Chrome、微信
 - 内置默认配置，插上手柄就能用
@@ -91,6 +92,16 @@ ChatGPT 聚焦输入框是 `⇧⎋`，而 Claude Code 压根没有这个快捷�
 
 见 [Xbox 蓝牙实机证明](docs/xbox-proof.md)：包含原始 HID → 标准化输入 →
 语义动作的完整链路，以及未经修改的 app 实拍截图。
+
+### Xbox Elite Series 2 手柄图
+
+<p align="center">
+<img src="Assets/ControllerArt/XboxEliteSeries2Controller.svg" width="480" alt="黑色 Xbox Elite Series 2，包含防滑握把、金属方向键和配置指示灯">
+</p>
+
+Elite Series 2 使用参考微软官方产品照片绘制的专属矢量图。鼠标移到按键或方向行时，
+对应控件会点亮；高亮与手柄图共用 SVG 轮廓，弧形扳机和肩键也能准确对齐。
+查看[修改前后截图](docs/xbox-proof.md#controller-illustration)。
 
 ## 安装
 
